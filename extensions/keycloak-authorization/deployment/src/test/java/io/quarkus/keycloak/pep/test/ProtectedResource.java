@@ -7,12 +7,7 @@ import java.util.function.Function;
 
 import javax.inject.Inject;
 import javax.security.auth.AuthPermission;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
@@ -31,8 +26,8 @@ public class ProtectedResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Uni<List<Permission>> permissions() {
-        return identity.checkPermission(new AuthPermission("Permission Resource")).onItem()
-                .apply(new Function<Boolean, List<Permission>>() {
+        return identity.checkPermission(new AuthPermission("Permission Resource"))
+                .onItem().transform(new Function<Boolean, List<Permission>>() {
                     @Override
                     public List<Permission> apply(Boolean granted) {
                         if (granted) {
