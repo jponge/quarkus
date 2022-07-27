@@ -1,6 +1,7 @@
 package org.jboss.resteasy.reactive.server.vertx.test.stream;
 
 import java.util.Date;
+import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -9,9 +10,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-
+import mutiny.zero.flow.adapters.AdaptersToReactiveStreams;
 import org.jboss.resteasy.reactive.common.util.MultiCollectors;
-import org.reactivestreams.Publisher;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -42,6 +42,13 @@ public class StreamResource {
     @Produces(MediaType.TEXT_PLAIN)
     public Publisher<String> getStreamedTextPublisher() {
         return Multi.createFrom().items("foo", "bar");
+    }
+
+    @Path("text/stream/legacy-publisher")
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public org.reactivestreams.Publisher<String> getStreamedTextLegacyPublisher() {
+        return AdaptersToReactiveStreams.publisher(Multi.createFrom().items("foo", "bar"));
     }
 
     @Path("byte-arrays/collect")
