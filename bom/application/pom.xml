@@ -204,6 +204,7 @@
         <strimzi-oauth.nimbus.version>9.25.4</strimzi-oauth.nimbus.version>
         <java-buildpack-client.version>0.0.6</java-buildpack-client.version>
         <org-crac.version>0.1.1</org-crac.version>
+        <mutiny-zero.version>0.4.3</mutiny-zero.version>
     </properties>
 
     <dependencyManagement>
@@ -5302,6 +5303,11 @@
                         <artifactId>org.osgi.annotation.versioning</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.reactive</groupId>
+                <artifactId>mutiny-zero-flow-adapters</artifactId>
+                <version>${mutiny-zero.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.eclipse.microprofile.reactive-streams-operators</groupId>
