@@ -258,4 +258,83 @@ public class ContextEndpoint {
         Assertions.assertEquals(1, ContextEntity.deleteAll());
         return ret;
     }
+
+    @Transactional
+    @GET
+    @Path("/transaction-single")
+    public Single<String> transactionSingle() throws SystemException {
+        ContextEntity entity = new ContextEntity();
+        entity.name = "Stef";
+        entity.persist();
+        Transaction t1 = Panache.getTransactionManager().getTransaction();
+        Assertions.assertNotNull(t1);
+        // our entity
+        Assertions.assertEquals(1, ContextEntity.count());
+
+        return txBean.doInTxSingle()
+                // this makes sure we get executed in another scheduler
+                .delay(100, TimeUnit.MILLISECONDS)
+                .map(text -> {
+                    // make sure we don't see the other transaction's entity
+                    Transaction t2;
+                    try {
+                        t2 = Panache.getTransactionManager().getTransaction();
+                    } catch (SystemException e) {
+                        throw new RuntimeException(e);
+                    }
+                    Assertions.assertEquals(t1, t2);
+                    Assertions.assertEquals(Status.STATUS_ACTIVE, t2.getStatus());
+                    return text;
+                });
+    }
+
+    @Transactional
+    @GET
+    @Path("/transaction-single2")
+    public Single<String> transactionSingle2() throws SystemException {
+        Single<String> ret = Single.just("OK");
+        // now delete both entities
+        Assertions.assertEquals(2, ContextEntity.deleteAll());
+        return ret;
+    }
+
+    @Transactional
+    @GET
+    @Path("/transaction-publisher")
+    @Stream(value = MODE.RAW)
+    public Publisher<String> transactionPublisher() throws SystemException {
+        ContextEntity entity = new ContextEntity();
+        entity.name = "Stef";
+        entity.persist();
+        Transaction t1 = Panache.getTransactionManager().getTransaction();
+        Assertions.assertNotNull(t1);
+        // our entity
+        Assertions.assertEquals(1, ContextEntity.count());
+
+        return txBean.doInTxPublisher()
+                // this makes sure we get executed in another scheduler
+                .delay(100, TimeUnit.MILLISECONDS)
+                .map(text -> {
+                    // make sure we don't see the other transaction's entity
+                    Transaction t2;
+                    try {
+                        t2 = Panache.getTransactionManager().getTransaction();
+                    } catch (SystemException e) {
+                        throw new RuntimeException(e);
+                    }
+                    Assertions.assertEquals(t1, t2);
+                    Assertions.assertEquals(Status.STATUS_ACTIVE, t2.getStatus());
+                    return text;
+                });
+    }
+
+    @Transactional
+    @GET
+    @Path("/transaction-publisher2")
+    public Flow.Publisher<String> transactionPublisher2() {
+        Flow.Publisher<String> ret = Multi.createFrom().item("OK");
+        // now delete both entities
+        Assertions.assertEquals(2, ContextEntity.deleteAll());
+        return ret;
+    }
 }

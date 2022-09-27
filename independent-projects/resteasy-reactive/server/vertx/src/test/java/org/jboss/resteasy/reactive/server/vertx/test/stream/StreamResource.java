@@ -10,13 +10,14 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-import mutiny.zero.flow.adapters.AdaptersToReactiveStreams;
+
 import org.jboss.resteasy.reactive.common.util.MultiCollectors;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import io.vertx.core.buffer.Buffer;
+import mutiny.zero.flow.adapters.AdaptersToReactiveStreams;
 
 @Path("stream")
 public class StreamResource {

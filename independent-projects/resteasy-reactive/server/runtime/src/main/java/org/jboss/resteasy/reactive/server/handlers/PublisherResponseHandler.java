@@ -14,7 +14,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import javax.ws.rs.core.MediaType;
-import mutiny.zero.flow.adapters.AdaptersToFlow;
+
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.common.util.RestMediaType;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
@@ -25,6 +25,8 @@ import org.jboss.resteasy.reactive.server.jaxrs.OutboundSseEventImpl;
 import org.jboss.resteasy.reactive.server.model.HandlerChainCustomizer.Phase;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.server.spi.StreamingResponse;
+
+import mutiny.zero.flow.adapters.AdaptersToFlow;
 
 /**
  * This handler is used to push streams of data to the client.
