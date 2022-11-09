@@ -137,12 +137,14 @@ public final class ListMethodImplementor extends StandardMethodImplementor {
         MethodCreator methodCreator = SignatureMethodCreator.getMethodCreator(METHOD_NAME, classCreator,
                 isNotReactivePanache() ? ofType(Response.class) : ofType(Uni.class, resourceMetadata.getEntityType()),
                 List.class, int.class, int.class, UriInfo.class);
+        methodCreator.setParameterNames(new String[] { "sort", "page", "size", "uriInfo" });
 
         // Add method annotations
         addGetAnnotation(methodCreator);
         addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
         addProducesAnnotation(methodCreator, APPLICATION_JSON);
         addLinksAnnotation(methodCreator, resourceMetadata.getEntityType(), REL);
+        addMethodAnnotations(methodCreator, resourceProperties.getMethodAnnotations(RESOURCE_METHOD_NAME));
         addOpenApiResponseAnnotation(methodCreator, Response.Status.OK, resourceMetadata.getEntityType(), true);
         addSecurityAnnotations(methodCreator, resourceProperties);
         addSortQueryParamValidatorAnnotation(methodCreator);
@@ -204,12 +206,14 @@ public final class ListMethodImplementor extends StandardMethodImplementor {
         MethodCreator methodCreator = SignatureMethodCreator.getMethodCreator(METHOD_NAME, classCreator,
                 isNotReactivePanache() ? ofType(Response.class) : ofType(Uni.class, resourceMetadata.getEntityType()),
                 List.class);
+        methodCreator.setParameterNames(new String[] { "sort" });
 
         // Add method annotations
         addGetAnnotation(methodCreator);
         addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
         addProducesAnnotation(methodCreator, APPLICATION_JSON);
         addLinksAnnotation(methodCreator, resourceMetadata.getEntityType(), REL);
+        addMethodAnnotations(methodCreator, resourceProperties.getMethodAnnotations(RESOURCE_METHOD_NAME));
         addOpenApiResponseAnnotation(methodCreator, Response.Status.OK, resourceMetadata.getEntityType(), true);
         addSecurityAnnotations(methodCreator, resourceProperties);
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(0), "sort");

@@ -129,11 +129,13 @@ public final class ListHalMethodImplementor extends HalMethodImplementor {
         MethodCreator methodCreator = SignatureMethodCreator.getMethodCreator(METHOD_NAME, classCreator,
                 isNotReactivePanache() ? ofType(Response.class) : ofType(Uni.class, resourceMetadata.getEntityType()),
                 List.class, int.class, int.class, UriInfo.class);
+        methodCreator.setParameterNames(new String[] { "sort", "page", "size", "uriInfo" });
 
         // Add method annotations
         addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
         addGetAnnotation(methodCreator);
         addProducesAnnotation(methodCreator, APPLICATION_HAL_JSON);
+        addMethodAnnotations(methodCreator, resourceProperties.getMethodAnnotations(RESOURCE_METHOD_NAME));
         addSecurityAnnotations(methodCreator, resourceProperties);
         addSortQueryParamValidatorAnnotation(methodCreator);
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(0), "sort");
@@ -204,11 +206,13 @@ public final class ListHalMethodImplementor extends HalMethodImplementor {
         MethodCreator methodCreator = SignatureMethodCreator.getMethodCreator(METHOD_NAME, classCreator,
                 isNotReactivePanache() ? ofType(Response.class) : ofType(Uni.class, resourceMetadata.getEntityType()),
                 List.class);
+        methodCreator.setParameterNames(new String[] { "sort" });
 
         // Add method annotations
         addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
         addGetAnnotation(methodCreator);
         addProducesAnnotation(methodCreator, APPLICATION_HAL_JSON);
+        addMethodAnnotations(methodCreator, resourceProperties.getMethodAnnotations(RESOURCE_METHOD_NAME));
         addSecurityAnnotations(methodCreator, resourceProperties);
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(0), "sort");
 

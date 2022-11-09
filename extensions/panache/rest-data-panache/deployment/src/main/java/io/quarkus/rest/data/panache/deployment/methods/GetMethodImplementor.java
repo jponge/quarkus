@@ -86,11 +86,13 @@ public final class GetMethodImplementor extends StandardMethodImplementor {
         MethodCreator methodCreator = SignatureMethodCreator.getMethodCreator(METHOD_NAME, classCreator,
                 isNotReactivePanache() ? ofType(Response.class) : ofType(Uni.class, resourceMetadata.getEntityType()),
                 resourceMetadata.getIdType());
+        methodCreator.setParameterNames(new String[] { "id" });
 
         // Add method annotations
         addPathAnnotation(methodCreator, appendToPath(resourceProperties.getPath(RESOURCE_METHOD_NAME), "{id}"));
         addGetAnnotation(methodCreator);
         addProducesJsonAnnotation(methodCreator, resourceProperties);
+        addMethodAnnotations(methodCreator, resourceProperties.getMethodAnnotations(RESOURCE_METHOD_NAME));
         addOpenApiResponseAnnotation(methodCreator, Response.Status.OK, resourceMetadata.getEntityType());
         addSecurityAnnotations(methodCreator, resourceProperties);
 
