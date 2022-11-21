@@ -29,6 +29,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -103,6 +104,7 @@ import org.jboss.resteasy.reactive.server.processor.scanning.MethodScanner;
 import org.jboss.resteasy.reactive.server.processor.scanning.ResponseHeaderMethodScanner;
 import org.jboss.resteasy.reactive.server.processor.scanning.ResponseStatusMethodScanner;
 import org.jboss.resteasy.reactive.server.processor.util.ResteasyReactiveServerDotNames;
+import org.jboss.resteasy.reactive.server.spi.RuntimeConfiguration;
 import org.jboss.resteasy.reactive.server.vertx.serializers.ServerMutinyAsyncFileMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.vertx.serializers.ServerMutinyBufferMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.vertx.serializers.ServerVertxAsyncFileMessageBodyWriter;
@@ -171,6 +173,7 @@ import io.quarkus.resteasy.reactive.server.runtime.security.EagerSecurityHandler
 import io.quarkus.resteasy.reactive.server.runtime.security.SecurityContextOverrideHandler;
 import io.quarkus.resteasy.reactive.server.spi.AnnotationsTransformerBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.ContextTypeBuildItem;
+import io.quarkus.resteasy.reactive.server.spi.HandlerConfigurationProviderBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.MethodScannerBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.NonBlockingReturnTypeBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.ResumeOn404BuildItem;
@@ -194,7 +197,6 @@ import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.ext.web.Route;
 import io.vertx.ext.web.RoutingContext;
 
 public class ResteasyReactiveProcessor {
@@ -1055,6 +1057,7 @@ public class ResteasyReactiveProcessor {
             BuildProducer<ResteasyReactiveDeploymentBuildItem> quarkusRestDeploymentBuildItemBuildProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<RouteBuildItem> routes,
+            BuildProducer<FilterBuildItem> filterBuildItemBuildProducer,
             ApplicationResultBuildItem applicationResultBuildItem,
             ResourceInterceptorsBuildItem resourceInterceptorsBuildItem,
             ExceptionMappersBuildItem exceptionMappersBuildItem,
@@ -1187,11 +1190,12 @@ public class ResteasyReactiveProcessor {
         if (!requestContextFactoryBuildItem.isPresent()) {
             RuntimeValue<RestInitialHandler> restInitialHandler = recorder.restInitialHandler(deployment);
             Handler<RoutingContext> handler = recorder.handler(restInitialHandler);
-            Consumer<Route> addFailureHandler = recorder.addFailureHandler(restInitialHandler);
+            Handler<RoutingContext> failureHandler = recorder.failureHandler(restInitialHandler);
+            filterBuildItemBuildProducer.produce(new FilterBuildItem(failureHandler, order, true));
 
             // Exact match for resources matched to the root path
             routes.produce(RouteBuildItem.builder()
-                    .orderedRoute(deploymentPath, order, addFailureHandler).handler(handler).build());
+                    .orderedRoute(deploymentPath, order).handler(handler).build());
             String matchPath = deploymentPath;
             if (matchPath.endsWith("/")) {
                 matchPath += "*";
@@ -1200,7 +1204,7 @@ public class ResteasyReactiveProcessor {
             }
             // Match paths that begin with the deployment path
             routes.produce(
-                    RouteBuildItem.builder().orderedRoute(matchPath, order, addFailureHandler)
+                    RouteBuildItem.builder().orderedRoute(matchPath, order)
                             .handler(handler).build());
         }
     }
@@ -1302,13 +1306,32 @@ public class ResteasyReactiveProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    public void applyRuntimeConfig(ResteasyReactiveRuntimeRecorder recorder,
+    public void runtimeConfiguration(ResteasyReactiveRuntimeRecorder recorder,
             Optional<ResteasyReactiveDeploymentBuildItem> deployment,
-            ResteasyReactiveServerRuntimeConfig resteasyReactiveServerRuntimeConf) {
-        if (!deployment.isPresent()) {
+            ResteasyReactiveServerRuntimeConfig resteasyReactiveServerRuntimeConf,
+            BuildProducer<HandlerConfigurationProviderBuildItem> producer) {
+        if (deployment.isEmpty()) {
             return;
         }
-        recorder.configure(deployment.get().getDeployment(), resteasyReactiveServerRuntimeConf);
+        producer.produce(new HandlerConfigurationProviderBuildItem(RuntimeConfiguration.class,
+                recorder.runtimeConfiguration(deployment.get().getDeployment(), resteasyReactiveServerRuntimeConf)));
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.RUNTIME_INIT)
+    public void configureHandlers(ResteasyReactiveRuntimeRecorder recorder,
+            Optional<ResteasyReactiveDeploymentBuildItem> deployment,
+            List<HandlerConfigurationProviderBuildItem> items) {
+        if (deployment.isEmpty()) {
+            return;
+        }
+
+        Map<Class<?>, Supplier<?>> runtimeConfigMap = new HashMap<>();
+        for (HandlerConfigurationProviderBuildItem item : items) {
+            runtimeConfigMap.put(item.getConfigClass(), item.getValueSupplier());
+        }
+
+        recorder.configureHandlers(deployment.get().getDeployment(), runtimeConfigMap);
     }
 
     @BuildStep

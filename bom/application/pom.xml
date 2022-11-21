@@ -28,7 +28,7 @@
         <opentelemetry-alpha.version>1.19.0-alpha</opentelemetry-alpha.version>
         <jaeger.version>1.8.1</jaeger.version>
         <quarkus-http.version>4.1.9</quarkus-http.version>
-        <micrometer.version>1.9.5</micrometer.version><!-- keep in sync with hdrhistogram -->
+        <micrometer.version>1.10.1</micrometer.version><!-- keep in sync with hdrhistogram -->
         <hdrhistogram.version>2.1.12</hdrhistogram.version><!-- keep in sync with micrometer -->
         <google-auth.version>0.22.0</google-auth.version>
         <microprofile-config-api.version>2.0.1</microprofile-config-api.version>
@@ -44,7 +44,7 @@
         <smallrye-health.version>3.3.0</smallrye-health.version>
         <smallrye-metrics.version>3.0.5</smallrye-metrics.version>
         <smallrye-open-api.version>2.3.1</smallrye-open-api.version>
-        <smallrye-graphql.version>1.8.2</smallrye-graphql.version>
+        <smallrye-graphql.version>1.8.3</smallrye-graphql.version>
         <smallrye-opentracing.version>2.1.1</smallrye-opentracing.version>
         <smallrye-fault-tolerance.version>5.6.0</smallrye-fault-tolerance.version>
         <smallrye-jwt.version>3.5.4</smallrye-jwt.version>
@@ -52,7 +52,7 @@
         <smallrye-reactive-streams-operators.version>1.0.13</smallrye-reactive-streams-operators.version>
         <smallrye-reactive-types-converter.version>3.0.0-milestone1</smallrye-reactive-types-converter.version>
         <smallrye-mutiny-vertx-binding.version>3.0.0-milestone1</smallrye-mutiny-vertx-binding.version>
-        <smallrye-reactive-messaging.version>3.21.0.RC1</smallrye-reactive-messaging.version>
+        <smallrye-reactive-messaging.version>3.22.0.RC1</smallrye-reactive-messaging.version>
         <smallrye-stork.version>1.3.0</smallrye-stork.version>
         <jakarta.activation.version>1.2.1</jakarta.activation.version>
         <jakarta.annotation-api.version>1.3.5</jakarta.annotation-api.version>
@@ -93,7 +93,7 @@
         <hibernate-reactive.version>1.1.9.Final</hibernate-reactive.version>
         <hibernate-validator.version>6.2.5.Final</hibernate-validator.version>
         <hibernate-search.version>6.1.7.Final</hibernate-search.version>
-        <narayana.version>5.13.1.Alpha1</narayana.version>
+        <narayana.version>5.13.1.Final</narayana.version>
         <jboss-transaction-api_1.2_spec.version>1.1.1.Final</jboss-transaction-api_1.2_spec.version>
         <agroal.version>1.16</agroal.version>
         <jboss-transaction-spi.version>7.6.0.Final</jboss-transaction-spi.version>
@@ -119,7 +119,7 @@
         <quartz.version>2.3.2</quartz.version>
         <h2.version>2.1.214</h2.version>
         <postgresql-jdbc.version>42.5.0</postgresql-jdbc.version>
-        <mariadb-jdbc.version>3.0.8</mariadb-jdbc.version>
+        <mariadb-jdbc.version>3.1.0</mariadb-jdbc.version>
         <mysql-jdbc.version>8.0.30</mysql-jdbc.version>
         <mssql-jdbc.version>11.2.0.jre11</mssql-jdbc.version>
         <adal4j.version>1.6.7</adal4j.version>
@@ -145,19 +145,19 @@
         <strimzi-test-container.version>0.100.0</strimzi-test-container.version>
         <!-- Scala is used by Kafka so we need to choose a compatible version -->
         <scala.version>2.13.10</scala.version>
-        <aws-lambda-java.version>1.2.1</aws-lambda-java.version>
+        <aws-lambda-java.version>1.2.2</aws-lambda-java.version>
         <aws-lambda-java-events.version>3.11.0</aws-lambda-java-events.version>
-        <aws-xray.version>2.12.0</aws-xray.version>
+        <aws-xray.version>2.13.0</aws-xray.version>
         <azure-functions-java-library.version>1.4.2</azure-functions-java-library.version>
         <kotlin.version>1.7.21</kotlin.version>
         <kotlin.coroutine.version>1.6.4</kotlin.coroutine.version>
         <kotlin-serialization.version>1.4.1</kotlin-serialization.version>
         <kubernetes-client.version>6.2.0</kubernetes-client.version> <!-- Please check with Java Operator SDK team before updating -->
-        <dekorate.version>3.1.1</dekorate.version> <!-- Please check with Java Operator SDK team before updating -->
+        <dekorate.version>3.1.2</dekorate.version> <!-- Please check with Java Operator SDK team before updating -->
         <maven-invoker.version>3.2.0</maven-invoker.version>
         <awaitility.version>4.2.0</awaitility.version>
         <jboss-logmanager.version>1.0.11</jboss-logmanager.version>
-        <flyway.version>9.7.0</flyway.version>
+        <flyway.version>9.8.1</flyway.version>
         <yasson.version>1.0.11</yasson.version>
         <liquibase.version>4.17.2</liquibase.version>
         <snakeyaml.version>1.33</snakeyaml.version>
@@ -174,7 +174,7 @@
         <quarkus-spring-data-api.version>2.1.SP2</quarkus-spring-data-api.version>
         <quarkus-spring-security-api.version>5.3.Final</quarkus-spring-security-api.version>
         <quarkus-spring-boot-api.version>2.1.SP1</quarkus-spring-boot-api.version>
-        <mockito.version>4.8.1</mockito.version>
+        <mockito.version>4.9.0</mockito.version>
         <jna.version>5.8.0</jna.version><!-- should satisfy both testcontainers and mongodb -->
         <antlr.version>4.9.2</antlr.version>
         <quarkus-security.version>1.1.4.Final</quarkus-security.version>
@@ -4977,6 +4977,16 @@
                 <groupId>org.mariadb.jdbc</groupId>
                 <artifactId>mariadb-java-client</artifactId>
                 <version>${mariadb-jdbc.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.checkerframework</groupId>
+                        <artifactId>checker-qual</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.slf4j</groupId>
+                        <artifactId>jcl-over-slf4j</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>mysql</groupId>
@@ -6197,6 +6207,7 @@
                                 <recipe>io.quarkus.smallrye</recipe>
                                 <recipe>io.quarkus.bom.resteasy-microprofile</recipe>
                                 <recipe>io.quarkus.bom.resteasy-spring-web</recipe>
+                                <recipe>io.quarkus.bom.resteasy-cdi</recipe>
                                 <recipe>io.quarkus.jakarta-json</recipe>
                                 <recipe>io.quarkus.keycloak-admin-client</recipe>
                                 <recipe>io.quarkus.infinispan</recipe>
