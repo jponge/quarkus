@@ -1,17 +1,14 @@
 package io.quarkus.mutiny.deployment.test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Handler;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
-import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 
 import org.junit.jupiter.api.Assertions;
@@ -20,17 +17,15 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.mutiny.runtime.MutinyInfrastructure;
 import io.quarkus.test.QuarkusUnitTest;
-import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
 import io.smallrye.mutiny.subscription.Cancellable;
 
-public class MutinyTest {
+public class MutinyProcessorTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .withApplicationRoot((jar) -> jar
-                    .addClasses(BeanUsingMutiny.class));
+                    .addClasses(TestingJulHandler.class, BeanUsingMutiny.class));
 
     @Inject
     BeanUsingMutiny bean;
@@ -119,55 +114,4 @@ public class MutinyTest {
         Assertions.assertEquals("check.0 | onItem(HELLO)", logRecord.getMessage());
     }
 
-    @ApplicationScoped
-    public static class BeanUsingMutiny {
-
-        public Uni<String> greeting() {
-            return Uni.createFrom().item(() -> "hello")
-                    .emitOn(Infrastructure.getDefaultExecutor());
-        }
-
-        public Multi<String> stream() {
-            return Multi.createFrom().items("hello", "world")
-                    .emitOn(Infrastructure.getDefaultExecutor());
-        }
-
-        public Uni<String> droppedException() {
-            return Uni.createFrom()
-                    .<String> emitter(uniEmitter -> {
-                        // Do not emit anything
-                    })
-                    .onCancellation().call(() -> Uni.createFrom().failure(new IOException("boom")));
-        }
-
-        public Uni<String> loggingOperator() {
-            return Uni.createFrom().item("hello")
-                    .onItem().transform(String::toUpperCase)
-                    .log("check");
-        }
-    }
-
-    private static class TestingJulHandler extends Handler {
-
-        private final ArrayList<LogRecord> logRecords = new ArrayList<>();
-
-        public ArrayList<LogRecord> getLogRecords() {
-            return logRecords;
-        }
-
-        @Override
-        public void publish(LogRecord record) {
-            logRecords.add(record);
-        }
-
-        @Override
-        public void flush() {
-            // Do nothing
-        }
-
-        @Override
-        public void close() throws SecurityException {
-            // Do nothing
-        }
-    }
 }
