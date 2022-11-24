@@ -45,7 +45,7 @@
 
         <!-- Dev tools -->
         <freemarker.version>2.3.31</freemarker.version>
-        <commonmark.version>0.20.0</commonmark.version>
+        <commonmark.version>0.21.0</commonmark.version>
 
         <!-- Arquillian BOM -->
         <arquillian.version>1.7.0.Alpha10</arquillian.version>
@@ -67,8 +67,8 @@
 
         <!-- MicroProfile TCK versions used to be defined here but have moved to the concrete tck modules -->
 
-        <!-- Antlr is used by the PanacheQL parser-->
-        <antlr.version>4.9.2</antlr.version>
+        <!-- Antlr 4 is used by the PanacheQL parser but also needs to match the requirements of Hibernate ORM 6.x-->
+        <antlr.version>4.10.1</antlr.version>
 
         <!-- SELinux access label, used when mounting local volumes into containers in tests -->
         <volume.access.modifier>:Z</volume.access.modifier>
@@ -109,7 +109,7 @@
         <wiremock-maven-plugin.version>7.2.0</wiremock-maven-plugin.version>
 
         <!-- Artemis test dependencies -->
-        <artemis.version>2.26.0</artemis.version>
+        <artemis.version>2.27.0</artemis.version>
 
         <!-- Code Coverage Properties-->
         <jacoco.agent.argLine></jacoco.agent.argLine>
