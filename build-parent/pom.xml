@@ -20,10 +20,10 @@
         <!-- These properties are needed in order for them to be resolvable by the generated projects -->
         <!-- Quarkus uses jboss-parent and it comes with 3.8.1-jboss-1, we don't want that in the templates -->
         <compiler-plugin.version>3.8.1</compiler-plugin.version>
-        <kotlin.version>1.7.21</kotlin.version>
+        <kotlin.version>1.7.22</kotlin.version>
         <dokka.version>1.7.20</dokka.version>
         <scala.version>2.13.8</scala.version>
-        <scala-maven-plugin.version>4.7.2</scala-maven-plugin.version>
+        <scala-maven-plugin.version>4.8.0</scala-maven-plugin.version>
         <!-- not pretty but this is used in the codestarts and we don't want to break compatibility -->
         <scala-plugin.version>${scala-maven-plugin.version}</scala-plugin.version>
 
@@ -34,7 +34,7 @@
         <failsafe-plugin.version>${version.surefire.plugin}</failsafe-plugin.version>
 
         <!-- Jandex versions -->
-        <jandex.version>3.0.4</jandex.version>
+        <jandex.version>3.0.5</jandex.version>
         <jandex-gradle-plugin.version>1.0.0</jandex-gradle-plugin.version>
 
         <asciidoctorj.version>2.5.7</asciidoctorj.version>
@@ -709,6 +709,7 @@
                                 </signaturesFiles>
                                 <failOnMissingClasses>false</failOnMissingClasses>
                                 <ignoreSignaturesOfMissingClasses>true</ignoreSignaturesOfMissingClasses>
+                                <suppressAnnotations><annotation>**.SuppressForbidden</annotation></suppressAnnotations>
                             </configuration>
                             <phase>compile</phase>
                             <goals>
