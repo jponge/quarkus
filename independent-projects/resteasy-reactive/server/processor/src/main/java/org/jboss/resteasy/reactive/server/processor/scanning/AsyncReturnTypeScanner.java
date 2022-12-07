@@ -28,7 +28,7 @@ public class AsyncReturnTypeScanner implements MethodScanner {
             return Collections.singletonList(new FixedHandlerChainCustomizer(new UniResponseHandler(),
                     HandlerChainCustomizer.Phase.AFTER_METHOD_INVOKE));
         }
-        if (returnTypeName.equals(MULTI) || returnTypeName.equals(PUBLISHER) || returnTypeName.equals(RS_PUBLISHER)) {
+        if (returnTypeName.equals(MULTI) || returnTypeName.equals(PUBLISHER) || returnTypeName.equals(LEGACY_PUBLISHER)) {
             return Collections.singletonList(new FixedHandlerChainCustomizer(new PublisherResponseHandler(),
                     HandlerChainCustomizer.Phase.AFTER_METHOD_INVOKE));
         }
@@ -39,6 +39,6 @@ public class AsyncReturnTypeScanner implements MethodScanner {
     public boolean isMethodSignatureAsync(MethodInfo method) {
         DotName returnTypeName = method.returnType().name();
         return returnTypeName.equals(COMPLETION_STAGE) || returnTypeName.equals(UNI) || returnTypeName.equals(MULTI)
-                || returnTypeName.equals(PUBLISHER) || returnTypeName.equals(RS_PUBLISHER);
+                || returnTypeName.equals(PUBLISHER) || returnTypeName.equals(LEGACY_PUBLISHER);
     }
 }
