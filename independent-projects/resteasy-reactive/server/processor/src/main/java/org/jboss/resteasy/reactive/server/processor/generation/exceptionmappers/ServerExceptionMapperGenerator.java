@@ -273,8 +273,7 @@ public final class ServerExceptionMapperGenerator {
                     // generate a constructor that takes the Instance<TargetClass> as an argument in order to avoid missing bean issues if the target has been conditionally disabled
                     // the body can freely read the instance value because if the target has been conditionally disabled, the generated class will not be instantiated
                     ctor = cc.getMethodCreator("<init>", void.class, Instance.class).setSignature(
-                            String.format("(L%s<L%s;>;)V",
-                                    Instance.class.getName().replace('.', '/'),
+                            String.format("(Ljavax/enterprise/inject/Instance<L%s;>;)V",
                                     targetClass.name().toString().replace('.', '/')));
                 } else {
                     // generate a constructor that takes the target class as an argument - this class is a CDI bean so Arc will be able to inject into the generated class
