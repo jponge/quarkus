@@ -30,6 +30,18 @@ value. This cookie contains an expiry time as part of the encrypted value, so al
 clocks synchronized. At one minute intervals a new cookie will be generated with an updated expiry time if the session
 is in use.
 
+Single Page Application (SPA) typically wants to avoid redirects, this can be done by removing default page paths:
+
+[source,properties]
+----
+# do not redirect, respond with HTTP 200 OK
+quarkus.http.auth.form.landing-page=
+
+# do not redirect, respond with HTTP 401 Unauthorized
+quarkus.http.auth.form.login-page=
+quarkus.http.auth.form.error-page=
+----
+
 The following properties can be used to configure form based auth:
 
 include::{generated-dir}/config/quarkus-vertx-http-config-group-form-auth-config.adoc[opts=optional, leveloffset=+1]
@@ -175,39 +187,7 @@ public class HelloService {
 
 === How to customize authentication exception responses
 
-By default, the authentication security constraints are enforced before the JAX-RS chain starts and only way to handle Quarkus Security authentication exceptions is to provide a failure handler like this one:
-
-[source,java]
-----
-package io.quarkus.it.keycloak;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-
-import io.quarkus.security.AuthenticationFailedException;
-import io.vertx.core.Handler;
-import io.vertx.ext.web.Router;
-import io.vertx.ext.web.RoutingContext;
-
-@ApplicationScoped
-public class AuthenticationFailedExceptionHandler {
-
-    public void init(@Observes Router router) {
-        router.route().failureHandler(new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-                if (event.failure() instanceof AuthenticationFailedException) {
-                    event.response().setStatusCode(401).end(CUSTOMIZED_RESPONSE);
-                } else {
-                    event.next();
-                }
-            }
-        });
-    }
-}
-----
-
-Disabling the proactive authentication effectively shifts this process to the moment when the JAX-RS chain starts running thus making it possible to use JAX-RS `ExceptionMapper` to capture Quarkus Security authentication exceptions such as `io.quarkus.security.AuthenticationFailedException`, for example:
+You can use JAX-RS `ExceptionMapper` to capture Quarkus Security authentication exceptions such as `io.quarkus.security.AuthenticationFailedException`, for example:
 
 [source,java]
 ----
@@ -231,6 +211,42 @@ public class AuthenticationFailedExceptionMapper implements ExceptionMapper<Auth
     @Override
     public Response toResponse(AuthenticationFailedException exception) {
         return Response.status(401).header("WWW-Authenticate", "Basic realm=\"Quarkus\"").build();
+    }
+}
+----
+
+CAUTION: Some HTTP authentication mechanisms need to handle authentication exceptions themselves in order to create a correct authentication challenge.
+For example, `io.quarkus.oidc.runtime.CodeAuthenticationMechanism` which manages OpenId Connect authorization code flow authentication, needs to build a correct redirect URL, cookies, etc.
+For that reason, using custom exception mappers to customize authentication exceptions thrown by such mechanisms is not recommended.
+In such cases, a safer way to customize authentication exceptions is to make sure the proactive authentication is not disabled and use Vert.x HTTP route failure handlers, as events come to the handler with the correct response status and headers.
+To that end, the only thing that needs to be done is to customize the response like this:
+
+[source,java]
+----
+package io.quarkus.it.keycloak;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+
+import io.quarkus.security.AuthenticationFailedException;
+import io.vertx.core.Handler;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+
+@ApplicationScoped
+public class AuthenticationFailedExceptionHandler {
+
+    public void init(@Observes Router router) {
+        router.route().failureHandler(new Handler<RoutingContext>() {
+            @Override
+            public void handle(RoutingContext event) {
+                if (event.failure() instanceof AuthenticationFailedException) {
+                    event.response().end("CUSTOMIZED_RESPONSE");
+                } else {
+                    event.next();
+                }
+            }
+        });
     }
 }
 ----

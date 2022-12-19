@@ -4,10 +4,14 @@ import static io.quarkus.redis.runtime.client.config.RedisConfig.DEFAULT_CLIENT_
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.CDI;
 
 import io.quarkus.redis.client.RedisClient;
 import io.quarkus.redis.client.reactive.ReactiveRedisClient;
@@ -22,8 +26,10 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import io.vertx.mutiny.core.Vertx;
+import io.vertx.mutiny.redis.client.Command;
 import io.vertx.mutiny.redis.client.Redis;
 import io.vertx.mutiny.redis.client.RedisAPI;
+import io.vertx.mutiny.redis.client.Request;
 
 @Recorder
 public class RedisClientRecorder {
@@ -34,25 +40,25 @@ public class RedisClientRecorder {
     private static final Map<String, RedisClientAndApi> clients = new HashMap<>();
     private static final Map<String, ReactiveRedisDataSourceImpl> dataSources = new HashMap<>();
     private Vertx vertx;
+    private ObservableRedisMetrics metrics;
 
     public RedisClientRecorder(RedisConfig rc) {
         this.config = rc;
     }
 
     public void initialize(RuntimeValue<io.vertx.core.Vertx> vertx, Set<String> names) {
-        this.vertx = Vertx.newInstance(vertx.getValue());
-        _initialize(this.vertx, names);
-    }
-
-    private void closeAllClients() {
-        for (Map.Entry<String, RedisClientAndApi> entry : clients.entrySet()) {
-            entry.getValue().redis.close();
+        Instance<ObservableRedisMetrics> instance = CDI.current().select(ObservableRedisMetrics.class);
+        if (instance.isResolvable()) {
+            this.metrics = instance.get();
+        } else {
+            this.metrics = null;
         }
-        clients.clear();
-        dataSources.clear();
+
+        this.vertx = Vertx.newInstance(vertx.getValue());
+        _initialize(vertx.getValue(), names);
     }
 
-    public void _initialize(Vertx vertx, Set<String> names) {
+    public void _initialize(io.vertx.core.Vertx vertx, Set<String> names) {
         for (String name : names) {
             // Search if we have an associated config:
             // - if default -> Default
@@ -72,10 +78,11 @@ public class RedisClientRecorder {
                             }
                         });
                 clients.computeIfAbsent(name,
-                        x -> new RedisClientAndApi(VertxRedisClientFactory.create(name, vertx, actualConfig)));
+                        x -> new RedisClientAndApi(name, VertxRedisClientFactory.create(name, vertx, actualConfig), metrics));
             } else if (DEFAULT_CLIENT_NAME.equalsIgnoreCase(name) && maybe.isPresent()) {
                 clients.computeIfAbsent(name,
-                        x -> new RedisClientAndApi(VertxRedisClientFactory.create(DEFAULT_CLIENT_NAME, vertx, maybe.get())));
+                        x -> new RedisClientAndApi(name,
+                                VertxRedisClientFactory.create(DEFAULT_CLIENT_NAME, vertx, maybe.get()), metrics));
             }
             // Do not throw an error. We would need to check if the default redis client is used.
         }
@@ -108,7 +115,7 @@ public class RedisClientRecorder {
         return new Supplier<io.vertx.redis.client.Redis>() {
             @Override
             public io.vertx.redis.client.Redis get() {
-                return clients.get(name).redis.getDelegate();
+                return clients.get(name).observable;
             }
         };
     }
@@ -203,13 +210,38 @@ public class RedisClientRecorder {
         });
     }
 
+    public void preload(String name, List<String> loadScriptPaths, boolean redisFlushBeforeLoad, boolean redisLoadOnlyIfEmpty) {
+        var tuple = clients.get(name);
+        if (tuple == null) {
+            throw new IllegalArgumentException("Unable import data into Redis - cannot find the Redis client " + name
+                    + ", available clients are: " + clients.keySet());
+        }
+
+        if (redisFlushBeforeLoad) {
+            tuple.redis.send(Request.cmd(Command.FLUSHALL)).await().indefinitely();
+        } else if (redisLoadOnlyIfEmpty) {
+            var list = tuple.redis.send(Request.cmd(Command.KEYS).arg("*")).await().indefinitely();
+            if (list.size() != 0) {
+                RedisDataLoader.LOGGER.debugf(
+                        "Skipping the Redis data loading because the database is not empty: %d keys found", list.size());
+                return;
+            }
+        }
+
+        for (String path : loadScriptPaths) {
+            RedisDataLoader.load(vertx, tuple.redis, path);
+        }
+    }
+
     private static class RedisClientAndApi {
         private final Redis redis;
         private final RedisAPI api;
+        private final ObservableRedis observable;
 
-        private RedisClientAndApi(Redis redis) {
-            this.redis = redis;
-            this.api = RedisAPI.api(redis);
+        private RedisClientAndApi(String name, io.vertx.redis.client.Redis redis, ObservableRedisMetrics metrics) {
+            this.observable = new ObservableRedis(redis, name, metrics);
+            this.redis = Redis.newInstance(this.observable);
+            this.api = RedisAPI.api(this.redis);
         }
     }
 
