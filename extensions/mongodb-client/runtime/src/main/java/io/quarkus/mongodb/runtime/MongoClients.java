@@ -134,11 +134,13 @@ public class MongoClients {
 
     public ReactiveMongoClient createReactiveMongoClient(String clientName)
             throws MongoException {
-        MongoClientSettings mongoConfiguration = createMongoConfiguration(clientName, getMatchingMongoClientConfig(clientName),
+        MongoClientConfig clientConfig = getMatchingMongoClientConfig(clientName);
+        MongoClientSettings mongoConfiguration = createMongoConfiguration(clientName, clientConfig,
                 true);
         com.mongodb.reactivestreams.client.MongoClient client = com.mongodb.reactivestreams.client.MongoClients
                 .create(mongoConfiguration);
-        ReactiveMongoClientImpl reactive = new ReactiveMongoClientImpl(client);
+        ReactiveBatchingConfig batchingConfig = clientConfig.reactiveBatching;
+        ReactiveMongoClientImpl reactive = new ReactiveMongoClientImpl(client, batchingConfig);
         reactiveMongoClients.put(clientName, reactive);
         return reactive;
     }

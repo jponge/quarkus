@@ -21,6 +21,7 @@ import io.quarkus.mongodb.ChangeStreamOptions;
 import io.quarkus.mongodb.CollectionListOptions;
 import io.quarkus.mongodb.reactive.ReactiveMongoCollection;
 import io.quarkus.mongodb.reactive.ReactiveMongoDatabase;
+import io.quarkus.mongodb.runtime.ReactiveBatchingConfig;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import mutiny.zero.flow.adapters.AdaptersToFlow;
@@ -28,9 +29,11 @@ import mutiny.zero.flow.adapters.AdaptersToFlow;
 public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     private final MongoDatabase database;
+    private final ReactiveBatchingConfig batchingConfig;
 
-    ReactiveMongoDatabaseImpl(MongoDatabase database) {
+    ReactiveMongoDatabaseImpl(MongoDatabase database, ReactiveBatchingConfig batchingConfig) {
         this.database = database;
+        this.batchingConfig = batchingConfig;
     }
 
     @Override
@@ -40,12 +43,12 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public ReactiveMongoCollection<Document> getCollection(String collectionName) {
-        return new ReactiveMongoCollectionImpl<>(database.getCollection(collectionName));
+        return new ReactiveMongoCollectionImpl<>(database.getCollection(collectionName), batchingConfig);
     }
 
     @Override
     public <T> ReactiveMongoCollection<T> getCollection(String collectionName, Class<T> clazz) {
-        return new ReactiveMongoCollectionImpl<>(database.getCollection(collectionName, clazz));
+        return new ReactiveMongoCollectionImpl<>(database.getCollection(collectionName, clazz), batchingConfig);
     }
 
     @Override
@@ -101,17 +104,17 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public Multi<String> listCollectionNames() {
-        return Wrappers.toMulti(database.listCollectionNames());
+        return Wrappers.toMulti(database.listCollectionNames(), batchingConfig);
     }
 
     @Override
     public Multi<String> listCollectionNames(ClientSession clientSession) {
-        return Wrappers.toMulti(database.listCollectionNames(clientSession));
+        return Wrappers.toMulti(database.listCollectionNames(clientSession), batchingConfig);
     }
 
     @Override
     public Multi<Document> listCollections() {
-        return Wrappers.toMulti(database.listCollections());
+        return Wrappers.toMulti(database.listCollections(), batchingConfig);
     }
 
     @Override
@@ -121,7 +124,7 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public <T> Multi<T> listCollections(Class<T> clazz) {
-        return Wrappers.toMulti(database.listCollections(clazz));
+        return Wrappers.toMulti(database.listCollections(clazz), batchingConfig);
     }
 
     @Override
@@ -139,7 +142,7 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public Multi<Document> listCollections(ClientSession clientSession) {
-        return Wrappers.toMulti(database.listCollections(clientSession));
+        return Wrappers.toMulti(database.listCollections(clientSession), batchingConfig);
     }
 
     @Override
@@ -149,7 +152,7 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public <T> Multi<T> listCollections(ClientSession clientSession, Class<T> clazz) {
-        return Wrappers.toMulti(database.listCollections(clientSession, clazz));
+        return Wrappers.toMulti(database.listCollections(clientSession, clazz), batchingConfig);
     }
 
     @Override
@@ -204,22 +207,22 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch() {
-        return Wrappers.toMulti(database.watch());
+        return Wrappers.toMulti(database.watch(), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch()));
+        return Wrappers.toMulti(apply(options, database.watch()), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(Class<T> clazz) {
-        return Wrappers.toMulti(database.watch(clazz));
+        return Wrappers.toMulti(database.watch(clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(Class<T> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(clazz)));
+        return Wrappers.toMulti(apply(options, database.watch(clazz)), batchingConfig);
     }
 
     private <D> ChangeStreamPublisher<D> apply(ChangeStreamOptions options, ChangeStreamPublisher<D> watch) {
@@ -231,77 +234,77 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(database.watch(pipeline));
+        return Wrappers.toMulti(database.watch(pipeline), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(pipeline)));
+        return Wrappers.toMulti(apply(options, database.watch(pipeline)), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(List<? extends Bson> pipeline, Class<T> clazz) {
-        return Wrappers.toMulti(database.watch(pipeline, clazz));
+        return Wrappers.toMulti(database.watch(pipeline, clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(List<? extends Bson> pipeline, Class<T> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, database.watch(pipeline, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession) {
-        return Wrappers.toMulti(database.watch(clientSession));
+        return Wrappers.toMulti(database.watch(clientSession), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(clientSession)));
+        return Wrappers.toMulti(apply(options, database.watch(clientSession)), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(ClientSession clientSession, Class<T> clazz) {
-        return Wrappers.toMulti(database.watch(clientSession, clazz));
+        return Wrappers.toMulti(database.watch(clientSession, clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(ClientSession clientSession, Class<T> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(clientSession, clazz)));
+        return Wrappers.toMulti(apply(options, database.watch(clientSession, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(database.watch(clientSession, pipeline));
+        return Wrappers.toMulti(database.watch(clientSession, pipeline), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(clientSession, pipeline)));
+        return Wrappers.toMulti(apply(options, database.watch(clientSession, pipeline)), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<T> clazz) {
-        return Wrappers.toMulti(database.watch(clientSession, pipeline, clazz));
+        return Wrappers.toMulti(database.watch(clientSession, pipeline, clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<ChangeStreamDocument<T>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<T> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, database.watch(clientSession, pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, database.watch(clientSession, pipeline, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<Document> aggregate(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(database.aggregate(pipeline));
+        return Wrappers.toMulti(database.aggregate(pipeline), batchingConfig);
     }
 
     @Override
     public Multi<Document> aggregate(List<? extends Bson> pipeline, AggregateOptions options) {
-        return Wrappers.toMulti(apply(options, database.aggregate(pipeline)));
+        return Wrappers.toMulti(apply(options, database.aggregate(pipeline)), batchingConfig);
     }
 
     private <T> AggregatePublisher<T> apply(AggregateOptions options, AggregatePublisher<T> aggregate) {
@@ -313,34 +316,34 @@ public class ReactiveMongoDatabaseImpl implements ReactiveMongoDatabase {
 
     @Override
     public <T> Multi<T> aggregate(List<? extends Bson> pipeline, Class<T> clazz) {
-        return Wrappers.toMulti(database.aggregate(pipeline, clazz));
+        return Wrappers.toMulti(database.aggregate(pipeline, clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<T> aggregate(List<? extends Bson> pipeline, Class<T> clazz, AggregateOptions options) {
-        return Wrappers.toMulti(apply(options, database.aggregate(pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, database.aggregate(pipeline, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<Document> aggregate(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(database.aggregate(clientSession, pipeline));
+        return Wrappers.toMulti(database.aggregate(clientSession, pipeline), batchingConfig);
     }
 
     @Override
     public Multi<Document> aggregate(ClientSession clientSession, List<? extends Bson> pipeline,
             AggregateOptions options) {
-        return Wrappers.toMulti(apply(options, database.aggregate(clientSession, pipeline)));
+        return Wrappers.toMulti(apply(options, database.aggregate(clientSession, pipeline)), batchingConfig);
     }
 
     @Override
     public <T> Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<T> clazz) {
-        return Wrappers.toMulti(database.aggregate(clientSession, pipeline, clazz));
+        return Wrappers.toMulti(database.aggregate(clientSession, pipeline, clazz), batchingConfig);
     }
 
     @Override
     public <T> Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<T> clazz,
             AggregateOptions options) {
-        return Wrappers.toMulti(apply(options, database.aggregate(clientSession, pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, database.aggregate(clientSession, pipeline, clazz)), batchingConfig);
     }
 
     @Override

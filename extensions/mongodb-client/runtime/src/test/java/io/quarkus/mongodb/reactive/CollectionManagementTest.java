@@ -47,7 +47,7 @@ class CollectionManagementTest extends MongoTestBase {
 
     @BeforeEach
     void init() {
-        client = new ReactiveMongoClientImpl(MongoClients.create(getConnectionString()));
+        client = new ReactiveMongoClientImpl(MongoClients.create(getConnectionString()), null);
     }
 
     @AfterEach

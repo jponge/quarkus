@@ -46,6 +46,7 @@ import io.quarkus.mongodb.DistinctOptions;
 import io.quarkus.mongodb.FindOptions;
 import io.quarkus.mongodb.MapReduceOptions;
 import io.quarkus.mongodb.reactive.ReactiveMongoCollection;
+import io.quarkus.mongodb.runtime.ReactiveBatchingConfig;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import mutiny.zero.flow.adapters.AdaptersToFlow;
@@ -53,9 +54,11 @@ import mutiny.zero.flow.adapters.AdaptersToFlow;
 public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T> {
 
     private final MongoCollection<T> collection;
+    private final ReactiveBatchingConfig batchingConfig;
 
-    ReactiveMongoCollectionImpl(MongoCollection<T> collection) {
+    ReactiveMongoCollectionImpl(MongoCollection<T> collection, ReactiveBatchingConfig batchingConfig) {
         this.collection = collection;
+        this.batchingConfig = batchingConfig;
     }
 
     @Override
@@ -110,22 +113,22 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public <D> Multi<D> distinct(String fieldName, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(fieldName, clazz));
+        return Wrappers.toMulti(collection.distinct(fieldName, clazz), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(String fieldName, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(fieldName, filter, clazz));
+        return Wrappers.toMulti(collection.distinct(fieldName, filter, clazz), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, clazz));
+        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, clazz), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, filter, clazz));
+        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, filter, clazz), batchingConfig);
     }
 
     private <D> DistinctPublisher<D> apply(DistinctOptions options, DistinctPublisher<D> stream) {
@@ -137,64 +140,64 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public <D> Multi<D> distinct(String fieldName, Class<D> clazz, DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, clazz)));
+        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, clazz)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(String fieldName, Bson filter, Class<D> clazz, DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, filter, clazz)));
+        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, filter, clazz)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz,
             DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, clazz)));
+        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, clazz)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz,
             DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, filter, clazz)));
+        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, filter, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> find() {
-        return Wrappers.toMulti(collection.find());
+        return Wrappers.toMulti(collection.find(), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clazz));
+        return Wrappers.toMulti(collection.find(clazz), batchingConfig);
     }
 
     @Override
     public Multi<T> find(Bson filter) {
-        return Wrappers.toMulti(collection.find(filter));
+        return Wrappers.toMulti(collection.find(filter), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(filter, clazz));
+        return Wrappers.toMulti(collection.find(filter, clazz), batchingConfig);
     }
 
     @Override
     public Multi<T> find(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.find(clientSession));
+        return Wrappers.toMulti(collection.find(clientSession), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clientSession, clazz));
+        return Wrappers.toMulti(collection.find(clientSession, clazz), batchingConfig);
     }
 
     @Override
     public Multi<T> find(ClientSession clientSession, Bson filter) {
-        return Wrappers.toMulti(collection.find(clientSession, filter));
+        return Wrappers.toMulti(collection.find(clientSession, filter), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(ClientSession clientSession, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clientSession, filter, clazz));
+        return Wrappers.toMulti(collection.find(clientSession, filter, clazz), batchingConfig);
     }
 
     private <D> FindPublisher<D> apply(FindOptions options, FindPublisher<D> publisher) {
@@ -206,62 +209,62 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public Multi<T> find(FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find()));
+        return Wrappers.toMulti(apply(options, collection.find()), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clazz)));
+        return Wrappers.toMulti(apply(options, collection.find(clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> find(Bson filter, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(filter)));
+        return Wrappers.toMulti(apply(options, collection.find(filter)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(Bson filter, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(filter, clazz)));
+        return Wrappers.toMulti(apply(options, collection.find(filter, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> find(ClientSession clientSession, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession)));
+        return Wrappers.toMulti(apply(options, collection.find(clientSession)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(ClientSession clientSession, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, clazz)));
+        return Wrappers.toMulti(apply(options, collection.find(clientSession, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> find(ClientSession clientSession, Bson filter, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter)));
+        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter)), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> find(ClientSession clientSession, Bson filter, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter, clazz)));
+        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> aggregate(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.aggregate(pipeline));
+        return Wrappers.toMulti(collection.aggregate(pipeline), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> aggregate(List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.aggregate(pipeline, clazz));
+        return Wrappers.toMulti(collection.aggregate(pipeline, clazz), batchingConfig);
     }
 
     @Override
     public Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline));
+        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline, clazz));
+        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline, clazz), batchingConfig);
     }
 
     private <D> Flow.Publisher<D> apply(AggregateOptions options, AggregatePublisher<D> publisher) {
@@ -295,48 +298,48 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch() {
-        return Wrappers.toMulti(collection.watch());
+        return Wrappers.toMulti(collection.watch(), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clazz));
+        return Wrappers.toMulti(collection.watch(clazz), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.watch(pipeline));
+        return Wrappers.toMulti(collection.watch(pipeline), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(pipeline, clazz));
+        return Wrappers.toMulti(collection.watch(pipeline, clazz), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.watch(clientSession));
+        return Wrappers.toMulti(collection.watch(clientSession), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clientSession, clazz));
+        return Wrappers.toMulti(collection.watch(clientSession, clazz), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.watch(clientSession, pipeline));
+        return Wrappers.toMulti(collection.watch(clientSession, pipeline), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clientSession, pipeline, clazz));
+        return Wrappers.toMulti(collection.watch(clientSession, pipeline, clazz), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch()));
+        return Wrappers.toMulti(apply(options, collection.watch()), batchingConfig);
     }
 
     private <D> ChangeStreamPublisher<D> apply(ChangeStreamOptions options, ChangeStreamPublisher<D> watch) {
@@ -348,62 +351,62 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(Class<D> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clazz)));
+        return Wrappers.toMulti(apply(options, collection.watch(clazz)), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(pipeline)));
+        return Wrappers.toMulti(apply(options, collection.watch(pipeline)), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, collection.watch(pipeline, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession)));
+        return Wrappers.toMulti(apply(options, collection.watch(clientSession)), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, clazz)));
+        return Wrappers.toMulti(apply(options, collection.watch(clientSession, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline)));
+        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline)), batchingConfig);
     }
 
     @Override
     public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<D> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline, clazz)));
+        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline, clazz)), batchingConfig);
     }
 
     @Override
     public Multi<T> mapReduce(String mapFunction, String reduceFunction) {
-        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction));
+        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> mapReduce(String mapFunction, String reduceFunction, Class<D> clazz) {
-        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction, clazz));
+        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction, clazz), batchingConfig);
     }
 
     @Override
     public Multi<T> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction) {
-        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction));
+        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
             Class<D> clazz) {
-        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction, clazz));
+        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction, clazz), batchingConfig);
     }
 
     @Override
@@ -783,22 +786,22 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public Multi<Document> listIndexes() {
-        return Wrappers.toMulti(collection.listIndexes());
+        return Wrappers.toMulti(collection.listIndexes(), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> listIndexes(Class<D> clazz) {
-        return Wrappers.toMulti(collection.listIndexes(clazz));
+        return Wrappers.toMulti(collection.listIndexes(clazz), batchingConfig);
     }
 
     @Override
     public Multi<Document> listIndexes(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.listIndexes(clientSession));
+        return Wrappers.toMulti(collection.listIndexes(clientSession), batchingConfig);
     }
 
     @Override
     public <D> Multi<D> listIndexes(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.listIndexes(clientSession, clazz));
+        return Wrappers.toMulti(collection.listIndexes(clientSession, clazz), batchingConfig);
     }
 
     @Override
@@ -889,11 +892,11 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
 
     @Override
     public <NewTDocument> ReactiveMongoCollection<NewTDocument> withDocumentClass(Class<NewTDocument> clazz) {
-        return new ReactiveMongoCollectionImpl<>(this.collection.withDocumentClass(clazz));
+        return new ReactiveMongoCollectionImpl<>(this.collection.withDocumentClass(clazz), batchingConfig);
     }
 
     @Override
     public ReactiveMongoCollectionImpl<T> withReadPreference(ReadPreference readPreference) {
-        return new ReactiveMongoCollectionImpl<>(this.collection.withReadPreference(readPreference));
+        return new ReactiveMongoCollectionImpl<>(this.collection.withReadPreference(readPreference), batchingConfig);
     }
 }

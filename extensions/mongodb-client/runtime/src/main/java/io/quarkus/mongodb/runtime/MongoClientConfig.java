@@ -206,4 +206,9 @@ public class MongoClientConfig {
     @ConfigItem
     public Optional<UuidRepresentation> uuidRepresentation;
 
+    /**
+     * TBA
+     */
+    @ConfigItem
+    public ReactiveBatchingConfig reactiveBatching;
 }
