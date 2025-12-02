@@ -151,7 +151,7 @@ public class ScheduledTasksTest {
 
     // TODO remove
     public static void main(String[] args) throws InterruptedException {
-        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(Infrastructure.getDefaultWorkerPool()));
+        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(Infrastructure.getDefaultWorkerPool()), false);
 
         Vertx v = Vertx.vertx();
         v.runOnContext(_v -> {
