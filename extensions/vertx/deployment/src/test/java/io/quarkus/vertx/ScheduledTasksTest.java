@@ -3,10 +3,12 @@ package io.quarkus.vertx;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.*;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.test.QuarkusUnitTest;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.helpers.test.UniAssertSubscriber;
 import io.smallrye.mutiny.subscription.Cancellable;
 import io.vertx.core.Vertx;
 
@@ -102,6 +105,26 @@ public class ScheduledTasksTest {
         assertThat(items.get(0), containsString("Hello vert.x-eventloop-thread-"));
     }
 
+    @Test
+    void retryFromRegularThread() {
+        List<String> threadTraces = new ArrayList<>();
+        UniAssertSubscriber<String> sub = UniAssertSubscriber.create();
+        myBean.backoff(threadTraces).subscribe().withSubscriber(sub);
+        sub.awaitFailure().assertFailedWith(IOException.class, "boom");
+        assertThat(threadTraces, hasSize(6));
+        assertThat(threadTraces, allOf((everyItem(not(containsString("vert.x-eventloop-thread-"))))));
+    }
+
+    @Test
+    void retryFromEventLoop() {
+        List<String> threadTraces = new ArrayList<>();
+        UniAssertSubscriber<String> sub = UniAssertSubscriber.create();
+        vertx.runOnContext(v -> myBean.backoff(threadTraces).subscribe().withSubscriber(sub));
+        sub.awaitFailure().assertFailedWith(IOException.class, "boom");
+        assertThat(threadTraces, hasSize(6));
+        assertThat(threadTraces, allOf(everyItem(containsString("vert.x-eventloop-thread-"))));
+    }
+
     @ApplicationScoped
     static class MyBean {
 
@@ -115,6 +138,12 @@ public class ScheduledTasksTest {
             return Multi.createFrom().ticks()
                     .every(Duration.ofMillis(100))
                     .onItem().transform(tick -> "Hello " + Thread.currentThread().getName());
+        }
+
+        public Uni<String> backoff(List<String> threadTraces) {
+            return Uni.createFrom().<String> failure(new IOException("boom"))
+                    .onSubscription().invoke(() -> threadTraces.add(Thread.currentThread().getName()))
+                    .onFailure(IOException.class).retry().withBackOff(Duration.ofMillis(10)).atMost(5L);
         }
     }
 }
