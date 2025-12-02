@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import io.vertx.core.Context;
+import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
@@ -29,13 +30,14 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
         final Vertx vertx;
         final long timerId;
-        final io.vertx.core.Future<T> future;
+        final io.vertx.core.Future<T> vertxFuture;
         volatile boolean cancelled;
 
-        VertxFutureWrapper(Vertx vertx, long timerId, io.vertx.core.Future<T> future) {
+        // Minimal wrapper class with just what is need to support cancellation
+        VertxFutureWrapper(Vertx vertx, long timerId, io.vertx.core.Future<T> vertxFuture) {
             this.vertx = vertx;
             this.timerId = timerId;
-            this.future = future;
+            this.vertxFuture = vertxFuture;
         }
 
         @Override
@@ -61,7 +63,7 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
         @Override
         public boolean isDone() {
-            return future.isComplete();
+            return vertxFuture.isComplete();
         }
 
         @Override
@@ -83,9 +85,12 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
         if (context != null) {
             Promise<Void> promise = Promise.promise();
             Vertx vertx = context.owner();
-            long timerId = vertx.setTimer(unit.toMillis(delay), tick -> {
-                command.run();
-                promise.complete();
+            long timerId = vertx.setTimer(unit.toMillis(delay), new Handler<Long>() {
+                @Override
+                public void handle(Long tick) {
+                    command.run();
+                    promise.complete();
+                }
             });
             return new VertxFutureWrapper<>(vertx, timerId, promise.future());
         }
@@ -94,7 +99,7 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
     @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
-        // Not used by Mutiny
+        // Not used by Mutiny operators
         return delegate.schedule(callable, delay, unit);
     }
 
@@ -103,7 +108,12 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
         Context context = Vertx.currentContext();
         if (context != null) {
             Vertx vertx = context.owner();
-            long timerId = vertx.setPeriodic(unit.toMillis(initialDelay), unit.toMillis(period), tick -> command.run());
+            long timerId = vertx.setPeriodic(unit.toMillis(initialDelay), unit.toMillis(period), new Handler<Long>() {
+                @Override
+                public void handle(Long tick) {
+                    command.run();
+                }
+            });
             return new VertxFutureWrapper<Void>(vertx, timerId, io.vertx.core.Future.succeededFuture());
         }
         return delegate.scheduleAtFixedRate(command, initialDelay, period, unit);
@@ -111,7 +121,7 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
     @Override
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
-        // Not used by Mutiny
+        // Not used by Mutiny operators
         return delegate.scheduleWithFixedDelay(command, initialDelay, delay, unit);
     }
 

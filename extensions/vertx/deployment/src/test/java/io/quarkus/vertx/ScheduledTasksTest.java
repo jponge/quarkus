@@ -14,6 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
+import io.quarkus.vertx.core.runtime.VertxTimerAwareScheduledExecutorService;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -145,5 +147,26 @@ public class ScheduledTasksTest {
                     .onSubscription().invoke(() -> threadTraces.add(Thread.currentThread().getName()))
                     .onFailure(IOException.class).retry().withBackOff(Duration.ofMillis(10)).atMost(5L);
         }
+    }
+
+    // TODO remove
+    public static void main(String[] args) throws InterruptedException {
+        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(Infrastructure.getDefaultWorkerPool()));
+
+        Vertx v = Vertx.vertx();
+        v.runOnContext(_v -> {
+
+            System.out.println("Booting on " + Thread.currentThread().getName());
+
+            Cancellable cancellable = Multi.createFrom().ticks().every(Duration.ofSeconds(1))
+                    .onItem().invoke(() -> System.out.println("|"))
+                    .onCancellation().invoke(() -> System.out.println("/cancel/"))
+                    .subscribe().with(tick -> System.out.println("\\tick] " + Thread.currentThread().getName()));
+
+            v.setTimer(3000, tick -> cancellable.cancel());
+
+        });
+
+        Thread.sleep(5_000);
     }
 }
