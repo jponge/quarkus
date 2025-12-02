@@ -752,7 +752,7 @@ public class VertxCoreRecorder {
         directory.delete();
     }
 
-    public void wrapMainExecutor(ScheduledExecutorService service) {
-        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(service));
+    public void wrapMainExecutorForMutiny(ScheduledExecutorService service) {
+        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(service), false);
     }
 }

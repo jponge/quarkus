@@ -245,7 +245,7 @@ class VertxCoreProcessor {
         }
 
         // Override the Mutiny infrastructure ScheduledExecutorService to dispatch scheduled operations to a Vert.x timer
-        recorder.wrapMainExecutor(executorBuildItem.getExecutorProxy());
+        recorder.wrapMainExecutorForMutiny(executorBuildItem.getExecutorProxy());
 
         Supplier<Vertx> vertx = recorder.configureVertx(launchMode.getLaunchMode(), shutdown, consumers,
                 executorBuildItem.getExecutorProxy());
