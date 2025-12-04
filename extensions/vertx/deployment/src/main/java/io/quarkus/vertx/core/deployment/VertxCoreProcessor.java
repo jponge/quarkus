@@ -238,14 +238,14 @@ class VertxCoreProcessor {
             ExecutorBuildItem executorBuildItem,
             MutinyRuntimeInitBuildItem mutinyRuntimeInitBuildItem) {
 
+        // Override the Mutiny infrastructure ScheduledExecutorService to dispatch scheduled operations to a Vert.x timer
+        recorder.wrapMainExecutorForMutiny(executorBuildItem.getExecutorProxy());
+
         Collections.sort(vertxOptionsConsumers);
         List<Consumer<VertxOptions>> consumers = new ArrayList<>(vertxOptionsConsumers.size());
         for (VertxOptionsConsumerBuildItem x : vertxOptionsConsumers) {
             consumers.add(x.getConsumer());
         }
-
-        // Override the Mutiny infrastructure ScheduledExecutorService to dispatch scheduled operations to a Vert.x timer
-        recorder.wrapMainExecutorForMutiny(executorBuildItem.getExecutorProxy());
 
         Supplier<Vertx> vertx = recorder.configureVertx(launchMode.getLaunchMode(), shutdown, consumers,
                 executorBuildItem.getExecutorProxy());

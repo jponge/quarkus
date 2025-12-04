@@ -13,10 +13,9 @@ import java.util.concurrent.TimeoutException;
 
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
-public class VertxTimerAwareScheduledExecutorService implements ScheduledExecutorService {
+public final class VertxTimerAwareScheduledExecutorService implements ScheduledExecutorService {
 
     private final ScheduledExecutorService delegate;
 
@@ -26,32 +25,31 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
     // ------------------ ScheduledFuture over Vert.x Future ------------------ //
 
-    private static class VertxFutureWrapper<T> implements ScheduledFuture<T> {
+    private static final class VertxFutureWrapper<T> implements ScheduledFuture<T> {
 
         final Vertx vertx;
         final long timerId;
-        final io.vertx.core.Future<T> vertxFuture;
         volatile boolean cancelled;
 
         // Minimal wrapper class with just what is need to support cancellation
-        VertxFutureWrapper(Vertx vertx, long timerId, io.vertx.core.Future<T> vertxFuture) {
+        VertxFutureWrapper(Vertx vertx, long timerId) {
             this.vertx = vertx;
             this.timerId = timerId;
-            this.vertxFuture = vertxFuture;
         }
 
         @Override
         public long getDelay(TimeUnit unit) {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("getDelay is not implemented");
         }
 
         @Override
         public int compareTo(Delayed o) {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("compareTo is not implemented");
         }
 
         @Override
         public boolean cancel(boolean mayInterruptIfRunning) {
+            // No need for C&S, cancelTimer can be called multiple times
             cancelled = true;
             return vertx.cancelTimer(timerId);
         }
@@ -63,17 +61,17 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
 
         @Override
         public boolean isDone() {
-            return vertxFuture.isComplete();
+            throw new UnsupportedOperationException("isDone is not implemented");
         }
 
         @Override
         public T get() throws InterruptedException, ExecutionException {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("get is not implemented");
         }
 
         @Override
         public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("get is not implemented");
         }
     }
 
@@ -83,16 +81,14 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
     public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         Context context = Vertx.currentContext();
         if (context != null) {
-            Promise<Void> promise = Promise.promise();
             Vertx vertx = context.owner();
             long timerId = vertx.setTimer(unit.toMillis(delay), new Handler<Long>() {
                 @Override
                 public void handle(Long tick) {
                     command.run();
-                    promise.complete();
                 }
             });
-            return new VertxFutureWrapper<>(vertx, timerId, promise.future());
+            return new VertxFutureWrapper<>(vertx, timerId);
         }
         return delegate.schedule(command, delay, unit);
     }
@@ -114,7 +110,7 @@ public class VertxTimerAwareScheduledExecutorService implements ScheduledExecuto
                     command.run();
                 }
             });
-            return new VertxFutureWrapper<Void>(vertx, timerId, io.vertx.core.Future.succeededFuture());
+            return new VertxFutureWrapper<Void>(vertx, timerId);
         }
         return delegate.scheduleAtFixedRate(command, initialDelay, period, unit);
     }

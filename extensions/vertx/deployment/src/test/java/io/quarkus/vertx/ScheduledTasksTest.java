@@ -14,8 +14,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
-import io.quarkus.vertx.core.runtime.VertxTimerAwareScheduledExecutorService;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -25,10 +23,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.vertx.core.runtime.VertxTimerAwareScheduledExecutorService;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.helpers.test.UniAssertSubscriber;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import io.smallrye.mutiny.subscription.Cancellable;
+import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 
 public class ScheduledTasksTest {
@@ -151,17 +152,25 @@ public class ScheduledTasksTest {
 
     // TODO remove
     public static void main(String[] args) throws InterruptedException {
-        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(Infrastructure.getDefaultWorkerPool()), false);
+        Infrastructure.setDefaultExecutor(new VertxTimerAwareScheduledExecutorService(Infrastructure.getDefaultWorkerPool()),
+                false);
 
         Vertx v = Vertx.vertx();
-        v.runOnContext(_v -> {
+        Context context = v.getOrCreateContext();
+
+        context.put("foo", "bar");
+
+        context.runOnContext(_v -> {
 
             System.out.println("Booting on " + Thread.currentThread().getName());
+
+            Context innerContext = Vertx.currentContext();
 
             Cancellable cancellable = Multi.createFrom().ticks().every(Duration.ofSeconds(1))
                     .onItem().invoke(() -> System.out.println("|"))
                     .onCancellation().invoke(() -> System.out.println("/cancel/"))
-                    .subscribe().with(tick -> System.out.println("\\tick] " + Thread.currentThread().getName()));
+                    .subscribe().with(tick -> System.out
+                            .println("\\tick] " + Thread.currentThread().getName() + " foo:" + innerContext.get("foo")));
 
             v.setTimer(3000, tick -> cancellable.cancel());
 
