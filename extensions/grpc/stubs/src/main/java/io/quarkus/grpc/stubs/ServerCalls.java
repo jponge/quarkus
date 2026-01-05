@@ -51,17 +51,21 @@ public class ServerCalls {
         try {
             trySetCompression(response, compression);
             streamCollector.add(response);
-            Multi<O> returnValue = implementation.apply(request);
-            if (returnValue == null) {
+            Multi<O> multi = implementation.apply(request);
+            if (multi == null) {
                 log.error("gRPC service method returned null instead of Multi. " +
                         "Please change the implementation to return a Multi object or throw StatusRuntimeException");
                 onError(response, Status.fromCode(Status.Code.INTERNAL).asException());
                 return;
             }
-            handleSubscription(returnValue.subscribe().with(
-                    response::onNext,
-                    throwable -> onError(response, throwable),
-                    () -> onCompleted(response)), response);
+            if (response instanceof ServerCallStreamObserver<O> observer) {
+                handleReadinessAwareSubscription(observer, multi);
+            } else {
+                handleUnboundedSubscription(multi.subscribe().with(
+                        response::onNext,
+                        throwable -> onError(response, throwable),
+                        () -> onCompleted(response)), response);
+            }
         } catch (Throwable throwable) {
             onError(response, throwable);
         }
@@ -95,10 +99,9 @@ public class ServerCalls {
         }
     }
 
-    private static <O> void handleSubscription(Cancellable cancellable, StreamObserver<O> response) {
+    private static <O> void handleUnboundedSubscription(Cancellable cancellable, StreamObserver<O> response) {
         if (response instanceof ServerCallStreamObserver) {
             ServerCallStreamObserver<O> serverCallResponse = (ServerCallStreamObserver<O>) response;
-
             Runnable cancel = cancellable::cancel;
 
             serverCallResponse.setOnCloseHandler(cancel);
@@ -119,16 +122,23 @@ public class ServerCalls {
                 onError(response, Status.fromCode(Status.Code.INTERNAL).asException());
                 return null;
             }
-            handleSubscription(multi.subscribe().with(
-                    response::onNext,
-                    failure -> onError(response, failure),
-                    () -> onCompleted(response)), response);
-
+            if (response instanceof ServerCallStreamObserver<O> observer) {
+                handleReadinessAwareSubscription(observer, multi);
+            } else {
+                handleUnboundedSubscription(multi.subscribe().with(
+                        response::onNext,
+                        throwable -> onError(response, throwable),
+                        () -> onCompleted(response)), response);
+            }
             return pump;
         } catch (Throwable throwable) {
             onError(response, throwable);
             return null;
         }
+    }
+
+    private static <O> void handleReadinessAwareSubscription(ServerCallStreamObserver<O> observer, Multi<O> multi) {
+        multi.subscribe().withSubscriber(new MultiToServerCallStreamObserverSubscriber<>(observer, 4096));
     }
 
     private static <O> void onCompleted(StreamObserver<O> response) {
