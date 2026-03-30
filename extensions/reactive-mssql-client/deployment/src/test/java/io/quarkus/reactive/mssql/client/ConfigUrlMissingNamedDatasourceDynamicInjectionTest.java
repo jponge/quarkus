@@ -14,7 +14,6 @@ import io.quarkus.arc.InactiveBeanException;
 import io.quarkus.arc.InjectableInstance;
 import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.quarkus.test.QuarkusExtensionTest;
-import io.vertx.mssqlclient.MSSQLPool;
 import io.vertx.sqlclient.Pool;
 
 public class ConfigUrlMissingNamedDatasourceDynamicInjectionTest {
@@ -37,11 +36,11 @@ public class ConfigUrlMissingNamedDatasourceDynamicInjectionTest {
 
     @Inject
     @ReactiveDataSource("ds-1")
-    InjectableInstance<MSSQLPool> vendorPool;
+    InjectableInstance<Pool> vendorPool;
 
     @Inject
     @ReactiveDataSource("ds-1")
-    InjectableInstance<io.vertx.mutiny.mssqlclient.MSSQLPool> mutinyVendorPool;
+    InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyVendorPool;
 
     @Test
     public void pool() {
@@ -55,12 +54,12 @@ public class ConfigUrlMissingNamedDatasourceDynamicInjectionTest {
 
     @Test
     public void vendorPool() {
-        doTest(vendorPool, MSSQLPool -> MSSQLPool.getConnection().toCompletionStage().toCompletableFuture().join());
+        doTest(vendorPool, pool1 -> pool1.getConnection().toCompletionStage().toCompletableFuture().join());
     }
 
     @Test
     public void mutinyVendorPool() {
-        doTest(mutinyVendorPool, MSSQLPool -> MSSQLPool.getConnection().subscribe().asCompletionStage().join());
+        doTest(mutinyVendorPool, pool1 -> pool1.getConnection().subscribe().asCompletionStage().join());
     }
 
     private <T> void doTest(InjectableInstance<T> instance, Consumer<T> action) {

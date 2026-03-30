@@ -111,18 +111,4 @@ class ReactiveDataSourceProcessor {
                     aggregatedBuildTimeConfigBuildItem.getDataSourceConfig().dbVersion()));
         }
     }
-
-    @BuildStep
-    void convertSPIReactiveDataSourceToDeprecatedOne(
-            List<io.quarkus.reactive.datasource.spi.ReactiveDataSourceBuildItem> dataSource,
-            BuildProducer<ReactiveDataSourceBuildItem> reactiveDataSource) {
-
-        for (io.quarkus.reactive.datasource.spi.ReactiveDataSourceBuildItem newDataSourceBuildItem : dataSource) {
-            reactiveDataSource.produce(new ReactiveDataSourceBuildItem(
-                    newDataSourceBuildItem.getName(),
-                    newDataSourceBuildItem.getDbKind(),
-                    newDataSourceBuildItem.isDefault(),
-                    newDataSourceBuildItem.getVersion()));
-        }
-    }
 }

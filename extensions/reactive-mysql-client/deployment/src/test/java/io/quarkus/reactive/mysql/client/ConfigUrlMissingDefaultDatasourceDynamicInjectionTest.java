@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.arc.InactiveBeanException;
 import io.quarkus.arc.InjectableInstance;
 import io.quarkus.test.QuarkusExtensionTest;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.sqlclient.Pool;
 
 public class ConfigUrlMissingDefaultDatasourceDynamicInjectionTest {
@@ -30,10 +29,10 @@ public class ConfigUrlMissingDefaultDatasourceDynamicInjectionTest {
     InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyPool;
 
     @Inject
-    InjectableInstance<MySQLPool> vendorPool;
+    InjectableInstance<Pool> vendorPool;
 
     @Inject
-    InjectableInstance<io.vertx.mutiny.mysqlclient.MySQLPool> mutinyVendorPool;
+    InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyVendorPool;
 
     @Test
     public void pool() {

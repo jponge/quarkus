@@ -14,7 +14,6 @@ import io.quarkus.arc.InactiveBeanException;
 import io.quarkus.arc.InjectableInstance;
 import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.quarkus.test.QuarkusExtensionTest;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.sqlclient.Pool;
 
 public class ConfigUrlMissingNamedDatasourceDynamicInjectionTest {
@@ -37,11 +36,11 @@ public class ConfigUrlMissingNamedDatasourceDynamicInjectionTest {
 
     @Inject
     @ReactiveDataSource("ds-1")
-    InjectableInstance<MySQLPool> vendorPool;
+    InjectableInstance<Pool> vendorPool;
 
     @Inject
     @ReactiveDataSource("ds-1")
-    InjectableInstance<io.vertx.mutiny.mysqlclient.MySQLPool> mutinyVendorPool;
+    InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyVendorPool;
 
     @Test
     public void pool() {

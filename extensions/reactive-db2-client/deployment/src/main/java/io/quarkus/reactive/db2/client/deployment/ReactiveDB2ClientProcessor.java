@@ -51,7 +51,6 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
 import io.quarkus.reactive.db2.client.DB2PoolCreator;
@@ -61,7 +60,6 @@ import io.quarkus.reactive.db2.client.runtime.DB2ServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.db2client.DB2Pool;
 import io.vertx.db2client.spi.DB2Driver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,14 +69,12 @@ class ReactiveDB2ClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { DB2_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_DB2_POOL = DotName.createSimple(DB2Pool.class);
+    private static final DotName VERTX_DB2_POOL = DotName.createSimple(Pool.class);
     private static final Type VERTX_DB2_POOL_TYPE = ClassType.create(VERTX_DB2_POOL);
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<DB2PoolBuildItem> db2Pool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
             DB2PoolRecorder recorder,
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
@@ -100,7 +96,7 @@ class ReactiveDB2ClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, db2Pool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             db2PoolNamesBuilder.add(dataSourceName);
         }
@@ -118,7 +114,6 @@ class ReactiveDB2ClientProcessor {
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_DB2_CLIENT));
 
-        vertxPool.produce(new VertxPoolBuildItem());
         return new ServiceStartBuildItem("reactive-db2-client");
     }
 
@@ -201,15 +196,12 @@ class ReactiveDB2ClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<DB2PoolBuildItem> db2Pool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<DB2Pool>, DB2Pool> poolFunction = recorder.configureDB2Pool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configureDB2Pool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        db2Pool.produce(new DB2PoolBuildItem(dataSourceName, poolFunction));
-
-        ExtendedBeanConfigurator db2PoolBeanConfigurator = SyntheticBeanBuildItem.configure(DB2Pool.class)
+        ExtendedBeanConfigurator db2PoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
                 .addType(Pool.class)
                 .scope(ApplicationScoped.class)
@@ -224,7 +216,7 @@ class ReactiveDB2ClientProcessor {
         syntheticBeans.produce(db2PoolBeanConfigurator.done());
 
         ExtendedBeanConfigurator mutinyDB2PoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.db2client.DB2Pool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
                 .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)

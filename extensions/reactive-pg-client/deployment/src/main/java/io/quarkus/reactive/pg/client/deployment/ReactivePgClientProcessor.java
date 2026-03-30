@@ -52,7 +52,6 @@ import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
 import io.quarkus.reactive.pg.client.PgPoolCreator;
@@ -62,7 +61,6 @@ import io.quarkus.reactive.pg.client.runtime.PostgreSQLServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.pgclient.PgPool;
 import io.vertx.pgclient.spi.PgDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -72,7 +70,7 @@ class ReactivePgClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { PG_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_PG_POOL = DotName.createSimple(PgPool.class);
+    private static final DotName VERTX_PG_POOL = DotName.createSimple(Pool.class);
     private static final Type VERTX_PG_POOL_TYPE = ClassType.create(VERTX_PG_POOL);
 
     @BuildStep
@@ -89,8 +87,6 @@ class ReactivePgClientProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<PgPoolBuildItem> pgPool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
             PgPoolRecorder recorder,
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
@@ -112,7 +108,7 @@ class ReactivePgClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, pgPool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             pgPoolNamesBuilder.add(dataSourceName);
         }
@@ -130,7 +126,6 @@ class ReactivePgClientProcessor {
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_PG_CLIENT));
 
-        vertxPool.produce(new VertxPoolBuildItem());
         return new ServiceStartBuildItem("reactive-pg-client");
     }
 
@@ -207,15 +202,12 @@ class ReactivePgClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<PgPoolBuildItem> pgPool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<PgPool>, PgPool> poolFunction = recorder.configurePgPool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configurePgPool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        pgPool.produce(new PgPoolBuildItem(dataSourceName, poolFunction));
-
-        ExtendedBeanConfigurator pgPoolBeanConfigurator = SyntheticBeanBuildItem.configure(PgPool.class)
+        ExtendedBeanConfigurator pgPoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
                 .addType(Pool.class)
                 .scope(ApplicationScoped.class)
@@ -231,7 +223,7 @@ class ReactivePgClientProcessor {
 
         // the Mutiny pool is created by using the Vertx pool
         ExtendedBeanConfigurator mutinyPgPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.pgclient.PgPool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
                 .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)

@@ -51,7 +51,6 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
 import io.quarkus.reactive.mysql.client.MySQLPoolCreator;
@@ -61,7 +60,6 @@ import io.quarkus.reactive.mysql.client.runtime.MySQLServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.mysqlclient.spi.MySQLDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,14 +69,12 @@ class ReactiveMySQLClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { MYSQL_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_MYSQL_POOL = DotName.createSimple(MySQLPool.class);
+    private static final DotName VERTX_MYSQL_POOL = DotName.createSimple(Pool.class);
     private static final Type VERTX_MYSQL_POOL_TYPE = ClassType.create(VERTX_MYSQL_POOL);
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
             MySQLPoolRecorder recorder,
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
@@ -100,7 +96,7 @@ class ReactiveMySQLClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, mySQLPool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             mySQLPoolNamesBuilder.add(dataSourceName);
         }
@@ -118,7 +114,6 @@ class ReactiveMySQLClientProcessor {
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
 
-        vertxPool.produce(new VertxPoolBuildItem());
         return new ServiceStartBuildItem("reactive-mysql-client");
     }
 
@@ -202,15 +197,12 @@ class ReactiveMySQLClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<MySQLPool>, MySQLPool> poolFunction = recorder.configureMySQLPool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configureMySQLPool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        mySQLPool.produce(new MySQLPoolBuildItem(dataSourceName, poolFunction));
-
-        ExtendedBeanConfigurator mySQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(MySQLPool.class)
+        ExtendedBeanConfigurator mySQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
                 .addType(Pool.class)
                 .scope(ApplicationScoped.class)
@@ -225,7 +217,7 @@ class ReactiveMySQLClientProcessor {
         syntheticBeans.produce(mySQLPoolBeanConfigurator.done());
 
         ExtendedBeanConfigurator mutinyMySQLPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.mysqlclient.MySQLPool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
                 .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)

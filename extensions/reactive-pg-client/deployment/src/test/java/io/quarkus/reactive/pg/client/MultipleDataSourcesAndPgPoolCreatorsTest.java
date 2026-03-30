@@ -49,7 +49,7 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            pgClient.query("SELECT 1").execute(ar -> {
+            pgClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -69,7 +69,7 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            pgClient.query("SELECT 1").execute(ar -> {
+            pgClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {

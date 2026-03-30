@@ -70,9 +70,8 @@ import io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenc
 import io.quarkus.hibernate.reactive.runtime.HibernateReactivePersistenceUnitProviderHelper;
 import io.quarkus.hibernate.reactive.runtime.HibernateReactiveRecorder;
 import io.quarkus.hibernate.reactive.runtime.transaction.HibernateActionsStrategy;
-import io.quarkus.reactive.datasource.deployment.ReactiveDataSourceBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
+import io.quarkus.reactive.datasource.spi.ReactiveDataSourceBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ConfigurationException;
 
@@ -285,7 +284,7 @@ public final class HibernateReactiveProcessor {
     }
 
     @BuildStep
-    @Consume(VertxPoolBuildItem.class)
+    @Consume(ReactiveDataSourceBuildItem.class)
     void waitForVertxPool(List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<HibernateOrmIntegrationRuntimeConfiguredBuildItem> runtimeConfigured) {
         for (PersistenceUnitDescriptorBuildItem puDescriptor : persistenceUnitDescriptorBuildItems) {

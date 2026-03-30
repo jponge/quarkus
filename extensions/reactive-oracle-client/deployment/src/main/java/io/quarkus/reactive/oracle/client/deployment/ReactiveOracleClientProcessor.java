@@ -51,7 +51,6 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
 import io.quarkus.reactive.oracle.client.OraclePoolCreator;
@@ -61,7 +60,6 @@ import io.quarkus.reactive.oracle.client.runtime.OracleServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.oracleclient.OraclePool;
 import io.vertx.oracleclient.spi.OracleDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,14 +69,12 @@ class ReactiveOracleClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { ORACLE_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_ORACLE_POOL = DotName.createSimple(OraclePool.class);
+    private static final DotName VERTX_ORACLE_POOL = DotName.createSimple(Pool.class);
     private static final Type VERTX_ORACLE_POOL_TYPE = ClassType.create(VERTX_ORACLE_POOL);
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<OraclePoolBuildItem> oraclePool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
             OraclePoolRecorder recorder,
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
@@ -100,7 +96,7 @@ class ReactiveOracleClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, oraclePool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             oraclePoolNamesBuilder.add(dataSourceName);
         }
@@ -118,7 +114,6 @@ class ReactiveOracleClientProcessor {
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_ORACLE_CLIENT));
 
-        vertxPool.produce(new VertxPoolBuildItem());
         return new ServiceStartBuildItem("reactive-oracle-client");
     }
 
@@ -201,15 +196,12 @@ class ReactiveOracleClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<OraclePoolBuildItem> oraclePool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<OraclePool>, OraclePool> poolFunction = recorder
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder
                 .configureOraclePool(vertx.getVertx(), eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        oraclePool.produce(new OraclePoolBuildItem(dataSourceName, poolFunction));
-
-        ExtendedBeanConfigurator oraclePoolBeanConfigurator = SyntheticBeanBuildItem.configure(OraclePool.class)
+        ExtendedBeanConfigurator oraclePoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
                 .addType(Pool.class)
                 .scope(ApplicationScoped.class)
@@ -224,7 +216,7 @@ class ReactiveOracleClientProcessor {
         syntheticBeans.produce(oraclePoolBeanConfigurator.done());
 
         ExtendedBeanConfigurator mutinyOraclePoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.oracleclient.OraclePool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
                 .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)

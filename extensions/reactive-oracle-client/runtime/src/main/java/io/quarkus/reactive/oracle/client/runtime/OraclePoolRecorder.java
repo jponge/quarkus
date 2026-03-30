@@ -33,10 +33,9 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
 import io.vertx.oracleclient.OracleConnectOptions;
-import io.vertx.oracleclient.OraclePool;
 import io.vertx.oracleclient.spi.OracleDriver;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.impl.Utils;
 
@@ -78,12 +77,12 @@ public class OraclePoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<OraclePool>, OraclePool> configureOraclePool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureOraclePool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public OraclePool apply(SyntheticCreationalContext<OraclePool> context) {
-                OraclePool pool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool pool = initialize(vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -97,25 +96,25 @@ public class OraclePoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.oracleclient.OraclePool>, io.vertx.mutiny.oracleclient.OraclePool> mutinyOraclePool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyOraclePool(
             String dataSourceName) {
         return new Function<>() {
             @SuppressWarnings("unchecked")
             @Override
-            public io.vertx.mutiny.oracleclient.OraclePool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.oracleclient.OraclePool.newInstance(
-                        (OraclePool) context.getInjectedReference(OraclePool.class, qualifier(dataSourceName)));
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private OraclePool initialize(VertxInternal vertx,
+    private Pool initialize(Vertx vertx,
             Integer eventLoopCount,
             String dataSourceName,
             DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveOracleConfig dataSourceReactiveOracleConfig,
-            SyntheticCreationalContext<OraclePool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig);
         OracleConnectOptions oracleConnectOptions = toOracleConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveOracleConfig);
@@ -226,16 +225,16 @@ public class OraclePoolRecorder {
         return oracleConnectOptions;
     }
 
-    private OraclePool createPool(Vertx vertx, PoolOptions poolOptions, OracleConnectOptions oracleConnectOptions,
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, OracleConnectOptions oracleConnectOptions,
             String dataSourceName, Supplier<Future<OracleConnectOptions>> databases,
-            SyntheticCreationalContext<OraclePool> context) {
+            SyntheticCreationalContext<Pool> context) {
         Instance<OraclePoolCreator> instance = context.getInjectedReference(POOL_CREATOR_TYPE_LITERAL,
                 qualifier(dataSourceName));
         if (instance.isResolvable()) {
             OraclePoolCreator.Input input = new DefaultInput(vertx, poolOptions, oracleConnectOptions);
-            return (OraclePool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (OraclePool) OracleDriver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return OracleDriver.INSTANCE.createPool(vertx, databases, poolOptions, null, null);
     }
 
     private static class DefaultInput implements OraclePoolCreator.Input {

@@ -39,11 +39,11 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.net.NetClientOptions;
 import io.vertx.mysqlclient.MySQLConnectOptions;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.mysqlclient.SslMode;
 import io.vertx.mysqlclient.spi.MySQLDriver;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.impl.Utils;
 
@@ -85,12 +85,12 @@ public class MySQLPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<MySQLPool>, MySQLPool> configureMySQLPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureMySQLPool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public MySQLPool apply(SyntheticCreationalContext<MySQLPool> context) {
-                MySQLPool pool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool mysqlPool = initialize(vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -98,38 +98,40 @@ public class MySQLPoolRecorder {
                         reactiveMySQLRuntimeConfig.getValue().dataSources().get(dataSourceName).reactive().mysql(),
                         context);
 
-                shutdown.addShutdownTask(pool::close);
-                return pool;
+                shutdown.addShutdownTask(mysqlPool::close);
+                return mysqlPool;
             }
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.mysqlclient.MySQLPool>, io.vertx.mutiny.mysqlclient.MySQLPool> mutinyMySQLPool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyMySQLPool(
             String dataSourceName) {
         return new Function<>() {
             @Override
             @SuppressWarnings("unchecked")
-            public io.vertx.mutiny.mysqlclient.MySQLPool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.mysqlclient.MySQLPool.newInstance(
-                        (MySQLPool) context.getInjectedReference(MySQLPool.class, qualifier(dataSourceName)));
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private MySQLPool initialize(VertxInternal vertx,
+    private Pool initialize(Vertx vertx,
             Integer eventLoopCount,
             String dataSourceName,
             DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig,
-            SyntheticCreationalContext<MySQLPool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig,
                 dataSourceReactiveMySQLConfig);
         List<MySQLConnectOptions> mySQLConnectOptions = toMySQLConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig);
         Supplier<Future<MySQLConnectOptions>> databasesSupplier = toDatabasesSupplier(mySQLConnectOptions,
                 dataSourceRuntimeConfig);
-        return createPool(vertx, poolOptions, mySQLConnectOptions, dataSourceName, databasesSupplier, context);
+        NetClientOptions netClientOptions = toNetClientOptions(dataSourceReactiveRuntimeConfig);
+        return createPool(vertx, poolOptions, mySQLConnectOptions, dataSourceName, databasesSupplier, netClientOptions,
+                context);
     }
 
     private Supplier<Future<MySQLConnectOptions>> toDatabasesSupplier(List<MySQLConnectOptions> mySQLConnectOptions,
@@ -250,26 +252,9 @@ public class MySQLPoolRecorder {
                 }
             }
 
-            mysqlConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
-
-            configurePemTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
-            configureJksTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
-            configurePfxTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
-
-            configurePemKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
-            configureJksKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
-            configurePfxKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
-
             mysqlConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts());
 
             mysqlConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval().toMillis());
-
-            var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
-            if ("NONE".equalsIgnoreCase(algo)) {
-                mysqlConnectOptions.setHostnameVerificationAlgorithm("");
-            } else {
-                mysqlConnectOptions.setHostnameVerificationAlgorithm(algo);
-            }
 
             dataSourceReactiveMySQLConfig.authenticationPlugin().ifPresent(mysqlConnectOptions::setAuthenticationPlugin);
 
@@ -285,16 +270,40 @@ public class MySQLPoolRecorder {
         return mysqlConnectOptionsList;
     }
 
-    private MySQLPool createPool(Vertx vertx, PoolOptions poolOptions, List<MySQLConnectOptions> mySQLConnectOptionsList,
+    private NetClientOptions toNetClientOptions(DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig) {
+        NetClientOptions netClientOptions = new NetClientOptions();
+
+        netClientOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
+
+        configurePemTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
+        configureJksTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
+        configurePfxTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
+
+        configurePemKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
+        configureJksKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
+        configurePfxKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
+
+        var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
+        if ("NONE".equalsIgnoreCase(algo)) {
+            netClientOptions.setHostnameVerificationAlgorithm("");
+        } else {
+            netClientOptions.setHostnameVerificationAlgorithm(algo);
+        }
+
+        return netClientOptions;
+    }
+
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, List<MySQLConnectOptions> mySQLConnectOptionsList,
             String dataSourceName, Supplier<Future<MySQLConnectOptions>> databases,
-            SyntheticCreationalContext<MySQLPool> context) {
+            NetClientOptions netClientOptions,
+            SyntheticCreationalContext<Pool> context) {
         Instance<MySQLPoolCreator> instance = context.getInjectedReference(POOL_CREATOR_TYPE_LITERAL,
                 qualifier(dataSourceName));
         if (instance.isResolvable()) {
             MySQLPoolCreator.Input input = new DefaultInput(vertx, poolOptions, mySQLConnectOptionsList);
-            return (MySQLPool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (MySQLPool) MySQLDriver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return MySQLDriver.INSTANCE.createPool(vertx, databases, poolOptions, netClientOptions, null);
     }
 
     private static class DefaultInput implements MySQLPoolCreator.Input {

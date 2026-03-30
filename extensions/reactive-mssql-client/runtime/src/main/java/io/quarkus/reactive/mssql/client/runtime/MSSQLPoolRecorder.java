@@ -39,10 +39,10 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.net.NetClientOptions;
 import io.vertx.mssqlclient.MSSQLConnectOptions;
-import io.vertx.mssqlclient.MSSQLPool;
 import io.vertx.mssqlclient.spi.MSSQLDriver;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.impl.Utils;
 
@@ -84,12 +84,12 @@ public class MSSQLPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<MSSQLPool>, MSSQLPool> configureMSSQLPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureMSSQLPool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public MSSQLPool apply(SyntheticCreationalContext<MSSQLPool> context) {
-                MSSQLPool pool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool pool = initialize(vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -103,30 +103,32 @@ public class MSSQLPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.mssqlclient.MSSQLPool>, io.vertx.mutiny.mssqlclient.MSSQLPool> mutinyMSSQLPool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyMSSQLPool(
             String dataSourceName) {
         return new Function<>() {
             @Override
             @SuppressWarnings("unchecked")
-            public io.vertx.mutiny.mssqlclient.MSSQLPool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.mssqlclient.MSSQLPool.newInstance(
-                        (MSSQLPool) context.getInjectedReference(MSSQLPool.class, qualifier(dataSourceName)));
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private MSSQLPool initialize(VertxInternal vertx,
+    private Pool initialize(Vertx vertx,
             Integer eventLoopCount,
             String dataSourceName, DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveMSSQLConfig dataSourceReactiveMSSQLConfig,
-            SyntheticCreationalContext<MSSQLPool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig);
         MSSQLConnectOptions mssqlConnectOptions = toMSSQLConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveMSSQLConfig);
         Supplier<Future<MSSQLConnectOptions>> databasesSupplier = toDatabasesSupplier(List.of(mssqlConnectOptions),
                 dataSourceRuntimeConfig);
-        return createPool(vertx, poolOptions, mssqlConnectOptions, dataSourceName, databasesSupplier, context);
+        NetClientOptions netClientOptions = toNetClientOptions(dataSourceReactiveRuntimeConfig);
+        return createPool(vertx, poolOptions, mssqlConnectOptions, dataSourceName, databasesSupplier, netClientOptions,
+                context);
     }
 
     private Supplier<Future<MSSQLConnectOptions>> toDatabasesSupplier(List<MSSQLConnectOptions> mssqlConnectOptionsList,
@@ -230,23 +232,6 @@ public class MSSQLPoolRecorder {
 
         mssqlConnectOptions.setSsl(dataSourceReactiveMSSQLConfig.ssl());
 
-        mssqlConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
-
-        configurePemTrustOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
-        configureJksTrustOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
-        configurePfxTrustOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
-
-        configurePemKeyCertOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
-        configureJksKeyCertOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
-        configurePfxKeyCertOptions(mssqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
-
-        var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
-        if ("NONE".equalsIgnoreCase(algo)) {
-            mssqlConnectOptions.setHostnameVerificationAlgorithm("");
-        } else {
-            mssqlConnectOptions.setHostnameVerificationAlgorithm(algo);
-        }
-
         dataSourceReactiveRuntimeConfig.additionalProperties().forEach(mssqlConnectOptions::addProperty);
 
         // Use the convention defined by Quarkus Micrometer Vert.x metrics to create metrics prefixed with mssql.
@@ -258,16 +243,39 @@ public class MSSQLPoolRecorder {
         return mssqlConnectOptions;
     }
 
-    private MSSQLPool createPool(Vertx vertx, PoolOptions poolOptions, MSSQLConnectOptions mSSQLConnectOptions,
+    private NetClientOptions toNetClientOptions(DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig) {
+        NetClientOptions netClientOptions = new NetClientOptions();
+
+        netClientOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
+
+        configurePemTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
+        configureJksTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
+        configurePfxTrustOptions(netClientOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
+
+        configurePemKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
+        configureJksKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
+        configurePfxKeyCertOptions(netClientOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
+
+        var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
+        if ("NONE".equalsIgnoreCase(algo)) {
+            netClientOptions.setHostnameVerificationAlgorithm("");
+        } else {
+            netClientOptions.setHostnameVerificationAlgorithm(algo);
+        }
+
+        return netClientOptions;
+    }
+
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, MSSQLConnectOptions mSSQLConnectOptions,
             String dataSourceName, Supplier<Future<MSSQLConnectOptions>> databases,
-            SyntheticCreationalContext<MSSQLPool> context) {
+            NetClientOptions netClientOptions, SyntheticCreationalContext<Pool> context) {
         Instance<MSSQLPoolCreator> instance = context.getInjectedReference(POOL_CREATOR_TYPE_LITERAL,
                 qualifier(dataSourceName));
         if (instance.isResolvable()) {
             MSSQLPoolCreator.Input input = new DefaultInput(vertx, poolOptions, mSSQLConnectOptions);
-            return (MSSQLPool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (MSSQLPool) MSSQLDriver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return MSSQLDriver.INSTANCE.createPool(vertx, databases, poolOptions, netClientOptions, null);
     }
 
     private static class DefaultInput implements MSSQLPoolCreator.Input {

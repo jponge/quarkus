@@ -14,7 +14,6 @@ import io.quarkus.arc.InactiveBeanException;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableInstance;
 import io.quarkus.test.QuarkusExtensionTest;
-import io.vertx.mssqlclient.MSSQLPool;
 import io.vertx.sqlclient.Pool;
 
 public class ConfigActiveFalseDefaultDatasourceDynamicInjectionTest {
@@ -30,10 +29,10 @@ public class ConfigActiveFalseDefaultDatasourceDynamicInjectionTest {
     InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyPool;
 
     @Inject
-    InjectableInstance<MSSQLPool> vendorPool;
+    InjectableInstance<Pool> vendorPool;
 
     @Inject
-    InjectableInstance<io.vertx.mutiny.mssqlclient.MSSQLPool> mutinyVendorPool;
+    InjectableInstance<io.vertx.mutiny.sqlclient.Pool> mutinyVendorPool;
 
     @Test
     public void pool() {
