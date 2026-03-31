@@ -49,7 +49,7 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            pgClient.query("SELECT 1").execute(ar -> {
+            pgClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -69,7 +69,7 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            pgClient.query("SELECT 1").execute(ar -> {
+            pgClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -86,8 +86,9 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(10, input.pgConnectOptionsList().get(0).getPipeliningLimit()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.pgConnectOptionsList().get(0).setHost("localhost").setPort(5431),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.pgConnectOptionsList().get(0).setHost("localhost").setPort(5431))
+                    .build();
         }
     }
 
@@ -98,8 +99,9 @@ public class MultipleDataSourcesAndPgPoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(7, input.pgConnectOptionsList().get(0).getPipeliningLimit()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.pgConnectOptionsList().get(0).setHost("localhost").setPort(5431),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.pgConnectOptionsList().get(0).setHost("localhost").setPort(5431))
+                    .build();
         }
     }
 }

@@ -33,7 +33,9 @@ public class MultipleOraclePoolCreatorsForSameDatasourceTest {
 
         @Override
         public Pool create(Input input) {
-            return Pool.pool(input.vertx(), input.oracleConnectOptions(), input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.oracleConnectOptions())
+                    .build();
         }
     }
 

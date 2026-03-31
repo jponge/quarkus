@@ -1,7 +1,6 @@
 package io.quarkus.reactive.mysql.client;
 
 import java.net.ConnectException;
-import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -12,10 +11,14 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import org.jboss.logging.Logger;
+
 import io.vertx.sqlclient.Pool;
 
 @Path("/dev")
 public class DevModeResource {
+
+    private static final Logger log = Logger.getLogger(DevModeResource.class);
 
     @Inject
     Pool client;
@@ -23,14 +26,14 @@ public class DevModeResource {
     @GET
     @Path("/error")
     @Produces(MediaType.TEXT_PLAIN)
-    public CompletionStage<Response> getErrorMessage() throws SQLException {
+    public CompletionStage<Response> getErrorMessage() {
         CompletableFuture<Response> future = new CompletableFuture<>();
-        client.query("SELECT 1").execute(ar -> {
+        client.query("SELECT 1").execute().onComplete(ar -> {
             Class<?> expectedExceptionClass = ConnectException.class;
             if (ar.succeeded()) {
                 future.complete(Response.serverError().entity("Expected SQL query to fail").build());
             } else if (!expectedExceptionClass.isAssignableFrom(ar.cause().getClass())) {
-                ar.cause().printStackTrace();
+                log.error("Unexpected exception type", ar.cause());
                 future.complete(Response.serverError()
                         .entity("Expected " + expectedExceptionClass + ", got " + ar.cause().getClass()).build());
             } else {

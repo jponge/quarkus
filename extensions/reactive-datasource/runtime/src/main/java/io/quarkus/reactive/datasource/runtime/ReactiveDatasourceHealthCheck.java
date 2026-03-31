@@ -56,7 +56,8 @@ public abstract class ReactiveDatasourceHealthCheck implements HealthCheck {
                     log.debug("Run health check on the current Vert.x context");
                     context.runOnContext(v -> {
                         pool.query(healthCheckSQL)
-                                .execute(ar -> {
+                                .execute()
+                                .onComplete(ar -> {
                                     checkFailure(ar, builder, dataSourceName);
                                     databaseConnectionAttempt.complete(null);
                                 });
@@ -65,7 +66,8 @@ public abstract class ReactiveDatasourceHealthCheck implements HealthCheck {
                     log.warn("Vert.x context unavailable to perform health check of reactive datasource `" + dataSourceName
                             + "`. This is unlikely to work correctly.");
                     pool.query(healthCheckSQL)
-                            .execute(ar -> {
+                            .execute()
+                            .onComplete(ar -> {
                                 checkFailure(ar, builder, dataSourceName);
                                 databaseConnectionAttempt.complete(null);
                             });

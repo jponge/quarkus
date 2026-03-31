@@ -3,6 +3,7 @@ package io.quarkus.reactive.db2.client;
 import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.vertx.core.Vertx;
 import io.vertx.db2client.DB2ConnectOptions;
+import io.vertx.sqlclient.ClientBuilder;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 
@@ -26,5 +27,7 @@ public interface DB2PoolCreator {
         PoolOptions poolOptions();
 
         DB2ConnectOptions db2ConnectOptions();
+
+        ClientBuilder<Pool> clientBuilder();
     }
 }

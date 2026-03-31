@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
-import io.vertx.pgclient.spi.PgDriver;
 import io.vertx.sqlclient.Pool;
 
 public class MultiplePgPoolCreatorsForSameDatasourceTest {
@@ -34,7 +33,9 @@ public class MultiplePgPoolCreatorsForSameDatasourceTest {
 
         @Override
         public Pool create(Input input) {
-            return PgDriver.INSTANCE.createPool(input.vertx(), input.pgConnectOptionsList(), input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.pgConnectOptionsList().get(0).setHost("localhost").setPort(5431))
+                    .build();
         }
     }
 

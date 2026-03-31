@@ -49,7 +49,7 @@ public class MultipleDataSourcesAndOraclePoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            oracleClient.query("SELECT 1 FROM DUAL").execute(ar -> {
+            oracleClient.query("SELECT 1 FROM DUAL").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -69,7 +69,7 @@ public class MultipleDataSourcesAndOraclePoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            oracleClient.query("SELECT 1 FROM DUAL").execute(ar -> {
+            oracleClient.query("SELECT 1 FROM DUAL").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -86,8 +86,9 @@ public class MultipleDataSourcesAndOraclePoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(12345, input.oracleConnectOptions().getPort()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.oracleConnectOptions().setHost("localhost").setPort(1521),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.oracleConnectOptions().setHost("localhost").setPort(1521))
+                    .build();
         }
     }
 
@@ -98,8 +99,9 @@ public class MultipleDataSourcesAndOraclePoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(55555, input.oracleConnectOptions().getPort()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.oracleConnectOptions().setHost("localhost").setPort(1521),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.oracleConnectOptions().setHost("localhost").setPort(1521))
+                    .build();
         }
     }
 }

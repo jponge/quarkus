@@ -61,7 +61,6 @@ import io.quarkus.reactive.mysql.client.runtime.MySQLServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.mysqlclient.spi.MySQLDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,13 +70,9 @@ class ReactiveMySQLClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { MYSQL_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_MYSQL_POOL = DotName.createSimple(MySQLPool.class);
-    private static final Type VERTX_MYSQL_POOL_TYPE = ClassType.create(VERTX_MYSQL_POOL);
-
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
             BuildProducer<VertxPoolBuildItem> vertxPool,
             MySQLPoolRecorder recorder,
             VertxBuildItem vertx,
@@ -100,7 +95,7 @@ class ReactiveMySQLClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, mySQLPool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             mySQLPoolNamesBuilder.add(dataSourceName);
         }
@@ -202,17 +197,14 @@ class ReactiveMySQLClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<MySQLPool>, MySQLPool> poolFunction = recorder.configureMySQLPool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configureMySQLPool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        mySQLPool.produce(new MySQLPoolBuildItem(dataSourceName, poolFunction));
 
-        ExtendedBeanConfigurator mySQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(MySQLPool.class)
+        ExtendedBeanConfigurator mySQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
-                .addType(Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
                 .addInjectionPoint(POOL_CREATOR_INJECTION_TYPE, qualifier(dataSourceName))
@@ -224,13 +216,13 @@ class ReactiveMySQLClientProcessor {
 
         syntheticBeans.produce(mySQLPoolBeanConfigurator.done());
 
+        // the Mutiny pool is created by using the Vertx pool
         ExtendedBeanConfigurator mutinyMySQLPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.mysqlclient.MySQLPool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
-                .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
-                .addInjectionPoint(VERTX_MYSQL_POOL_TYPE, qualifier(dataSourceName))
+                .addInjectionPoint(ClassType.create(DotName.createSimple(Pool.class)), qualifier(dataSourceName))
                 .checkActive(recorder.poolCheckActiveSupplier(dataSourceName))
                 .createWith(recorder.mutinyMySQLPool(dataSourceName))
                 .unremovable()

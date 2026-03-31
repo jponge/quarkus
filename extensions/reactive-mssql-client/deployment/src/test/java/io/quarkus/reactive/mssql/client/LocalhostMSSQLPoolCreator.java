@@ -9,7 +9,8 @@ public class LocalhostMSSQLPoolCreator implements MSSQLPoolCreator {
 
     @Override
     public Pool create(Input input) {
-        return Pool.pool(input.vertx(), input.msSQLConnectOptions().setHost("localhost").setPort(1435),
-                input.poolOptions());
+        return input.clientBuilder()
+                .connectingTo(input.msSQLConnectOptions().setHost("localhost").setPort(1435))
+                .build();
     }
 }

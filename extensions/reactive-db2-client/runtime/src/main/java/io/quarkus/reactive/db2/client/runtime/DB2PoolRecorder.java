@@ -4,12 +4,6 @@ import static io.quarkus.credentials.CredentialsProvider.PASSWORD_PROPERTY_NAME;
 import static io.quarkus.credentials.CredentialsProvider.USER_PROPERTY_NAME;
 import static io.quarkus.reactive.datasource.runtime.ReactiveDataSourceUtil.qualifier;
 import static io.quarkus.reactive.datasource.runtime.UnitisedTime.unitised;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
 
 import java.util.List;
 import java.util.Map;
@@ -39,11 +33,18 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.internal.VertxInternal;
+import io.vertx.core.net.ClientSSLOptions;
+import io.vertx.core.net.JksOptions;
+import io.vertx.core.net.PemKeyCertOptions;
+import io.vertx.core.net.PemTrustOptions;
+import io.vertx.core.net.PfxOptions;
+import io.vertx.db2client.DB2Builder;
 import io.vertx.db2client.DB2ConnectOptions;
-import io.vertx.db2client.DB2Pool;
-import io.vertx.db2client.spi.DB2Driver;
+import io.vertx.sqlclient.ClientBuilder;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.SqlConnectOptions;
 import io.vertx.sqlclient.impl.Utils;
 
 @Recorder
@@ -85,12 +86,12 @@ public class DB2PoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<DB2Pool>, DB2Pool> configureDB2Pool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureDB2Pool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public DB2Pool apply(SyntheticCreationalContext<DB2Pool> context) {
-                DB2Pool db2Pool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool db2Pool = initialize((VertxInternal) vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -104,44 +105,45 @@ public class DB2PoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.db2client.DB2Pool>, io.vertx.mutiny.db2client.DB2Pool> mutinyDB2Pool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyDB2Pool(
             String dataSourceName) {
         return new Function<>() {
             @SuppressWarnings("unchecked")
             @Override
-            public io.vertx.mutiny.db2client.DB2Pool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.db2client.DB2Pool.newInstance(
-                        (DB2Pool) context.getInjectedReference(DB2Pool.class, qualifier(dataSourceName)));
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private DB2Pool initialize(VertxInternal vertx,
+    private Pool initialize(VertxInternal vertx,
             Integer eventLoopCount,
             String dataSourceName,
             DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveDB2Config dataSourceReactiveDB2Config,
-            SyntheticCreationalContext<DB2Pool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig);
         DB2ConnectOptions db2ConnectOptions = toConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveDB2Config);
-        Supplier<Future<DB2ConnectOptions>> databasesSupplier = toDatabasesSupplier(List.of(db2ConnectOptions),
+        Supplier<Future<SqlConnectOptions>> databasesSupplier = toDatabasesSupplier(List.of(db2ConnectOptions),
                 dataSourceRuntimeConfig);
         return createPool(vertx, poolOptions, db2ConnectOptions, dataSourceName, databasesSupplier, context);
     }
 
-    private Supplier<Future<DB2ConnectOptions>> toDatabasesSupplier(List<DB2ConnectOptions> db2ConnectOptionsList,
+    @SuppressWarnings("unchecked")
+    private Supplier<Future<SqlConnectOptions>> toDatabasesSupplier(List<DB2ConnectOptions> db2ConnectOptionsList,
             DataSourceRuntimeConfig dataSourceRuntimeConfig) {
-        Supplier<Future<DB2ConnectOptions>> supplier;
+        Supplier<Future<SqlConnectOptions>> supplier;
         if (dataSourceRuntimeConfig.credentialsProvider().isPresent()) {
             String beanName = dataSourceRuntimeConfig.credentialsProviderName().orElse(null);
             CredentialsProvider credentialsProvider = CredentialsProviderFinder.find(beanName);
             String name = dataSourceRuntimeConfig.credentialsProvider().get();
-            supplier = new ConnectOptionsSupplier<>(credentialsProvider, name, db2ConnectOptionsList,
+            supplier = (Supplier) new ConnectOptionsSupplier<>(credentialsProvider, name, db2ConnectOptionsList,
                     DB2ConnectOptions::new);
         } else {
-            supplier = Utils.roundRobinSupplier(db2ConnectOptionsList);
+            supplier = (Supplier) Utils.roundRobinSupplier(db2ConnectOptionsList);
         }
         return supplier;
     }
@@ -228,26 +230,78 @@ public class DB2PoolRecorder {
 
         connectOptions.setSsl(dataSourceReactiveDB2Config.ssl());
 
-        connectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
+        ClientSSLOptions sslOptions = new ClientSSLOptions();
+        sslOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
 
-        configurePemTrustOptions(connectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
-        configureJksTrustOptions(connectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
-        configurePfxTrustOptions(connectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
+        var pemTrust = dataSourceReactiveRuntimeConfig.trustCertificatePem();
+        if (pemTrust.enabled() || (pemTrust.certs().isPresent() && !pemTrust.certs().get().isEmpty())) {
+            PemTrustOptions pemTrustOptions = new PemTrustOptions();
+            if (pemTrust.certs().isPresent()) {
+                for (String cert : pemTrust.certs().get()) {
+                    pemTrustOptions.addCertPath(cert);
+                }
+            }
+            sslOptions.setTrustOptions(pemTrustOptions);
+        }
 
-        configurePemKeyCertOptions(connectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
-        configureJksKeyCertOptions(connectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
-        configurePfxKeyCertOptions(connectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
+        var jksTrust = dataSourceReactiveRuntimeConfig.trustCertificateJks();
+        if (jksTrust.enabled()) {
+            JksOptions jksOptions = new JksOptions();
+            jksTrust.path().ifPresent(jksOptions::setPath);
+            jksTrust.password().ifPresent(jksOptions::setPassword);
+            sslOptions.setTrustOptions(jksOptions);
+        }
+
+        var pfxTrust = dataSourceReactiveRuntimeConfig.trustCertificatePfx();
+        if (pfxTrust.enabled()) {
+            PfxOptions pfxOptions = new PfxOptions();
+            pfxTrust.path().ifPresent(pfxOptions::setPath);
+            pfxTrust.password().ifPresent(pfxOptions::setPassword);
+            sslOptions.setTrustOptions(pfxOptions);
+        }
+
+        var pemKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePem();
+        if (pemKeyCert.enabled()) {
+            PemKeyCertOptions pemKeyCertOptions = new PemKeyCertOptions();
+            if (pemKeyCert.certs().isPresent()) {
+                for (String cert : pemKeyCert.certs().get()) {
+                    pemKeyCertOptions.addCertPath(cert);
+                }
+            }
+            if (pemKeyCert.keys().isPresent()) {
+                for (String key : pemKeyCert.keys().get()) {
+                    pemKeyCertOptions.addKeyPath(key);
+                }
+            }
+            sslOptions.setKeyCertOptions(pemKeyCertOptions);
+        }
+
+        var jksKeyCert = dataSourceReactiveRuntimeConfig.keyCertificateJks();
+        if (jksKeyCert.enabled()) {
+            JksOptions jksOptions = new JksOptions();
+            jksKeyCert.path().ifPresent(jksOptions::setPath);
+            jksKeyCert.password().ifPresent(jksOptions::setPassword);
+            sslOptions.setKeyCertOptions(jksOptions);
+        }
+
+        var pfxKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePfx();
+        if (pfxKeyCert.enabled()) {
+            PfxOptions pfxOptions = new PfxOptions();
+            pfxKeyCert.path().ifPresent(pfxOptions::setPath);
+            pfxKeyCert.password().ifPresent(pfxOptions::setPassword);
+            sslOptions.setKeyCertOptions(pfxOptions);
+        }
+
+        var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
+        if (!"NONE".equalsIgnoreCase(algo)) {
+            sslOptions.setHostnameVerificationAlgorithm(algo);
+        }
+
+        connectOptions.setSslOptions(sslOptions);
 
         connectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts());
 
         connectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval().toMillis());
-
-        var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
-        if ("NONE".equalsIgnoreCase(algo)) {
-            connectOptions.setHostnameVerificationAlgorithm("");
-        } else {
-            connectOptions.setHostnameVerificationAlgorithm(algo);
-        }
 
         dataSourceReactiveRuntimeConfig.additionalProperties().forEach(connectOptions::addProperty);
 
@@ -260,15 +314,19 @@ public class DB2PoolRecorder {
         return connectOptions;
     }
 
-    private DB2Pool createPool(Vertx vertx, PoolOptions poolOptions, DB2ConnectOptions dB2ConnectOptions,
-            String dataSourceName, Supplier<Future<DB2ConnectOptions>> databases,
-            SyntheticCreationalContext<DB2Pool> context) {
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, DB2ConnectOptions dB2ConnectOptions,
+            String dataSourceName, Supplier<Future<SqlConnectOptions>> databases,
+            SyntheticCreationalContext<Pool> context) {
         Instance<DB2PoolCreator> instance = context.getInjectedReference(POOL_CREATOR_TYPE_LITERAL, qualifier(dataSourceName));
         if (instance.isResolvable()) {
             DB2PoolCreator.Input input = new DefaultInput(vertx, poolOptions, dB2ConnectOptions);
-            return (DB2Pool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (DB2Pool) DB2Driver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return DB2Builder.pool()
+                .with(poolOptions)
+                .connectingTo(databases)
+                .using(vertx)
+                .build();
     }
 
     private static class DefaultInput implements DB2PoolCreator.Input {
@@ -295,6 +353,14 @@ public class DB2PoolRecorder {
         @Override
         public DB2ConnectOptions db2ConnectOptions() {
             return dB2ConnectOptions;
+        }
+
+        @Override
+        public ClientBuilder<Pool> clientBuilder() {
+            return DB2Builder.pool()
+                    .with(poolOptions)
+                    .connectingTo(dB2ConnectOptions)
+                    .using(vertx);
         }
     }
 

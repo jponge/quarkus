@@ -33,7 +33,9 @@ public class MultipleMSSQLPoolCreatorsForSameDatasourceTest {
 
         @Override
         public Pool create(Input input) {
-            return Pool.pool(input.vertx(), input.msSQLConnectOptions(), input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.msSQLConnectOptions())
+                    .build();
         }
     }
 

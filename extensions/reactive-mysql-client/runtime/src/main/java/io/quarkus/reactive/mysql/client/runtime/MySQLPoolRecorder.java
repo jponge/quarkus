@@ -4,12 +4,6 @@ import static io.quarkus.credentials.CredentialsProvider.PASSWORD_PROPERTY_NAME;
 import static io.quarkus.credentials.CredentialsProvider.USER_PROPERTY_NAME;
 import static io.quarkus.reactive.datasource.runtime.ReactiveDataSourceUtil.qualifier;
 import static io.quarkus.reactive.datasource.runtime.UnitisedTime.unitised;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,12 +33,19 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.internal.VertxInternal;
+import io.vertx.core.net.ClientSSLOptions;
+import io.vertx.core.net.JksOptions;
+import io.vertx.core.net.PemKeyCertOptions;
+import io.vertx.core.net.PemTrustOptions;
+import io.vertx.core.net.PfxOptions;
+import io.vertx.mysqlclient.MySQLBuilder;
 import io.vertx.mysqlclient.MySQLConnectOptions;
-import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.mysqlclient.SslMode;
-import io.vertx.mysqlclient.spi.MySQLDriver;
+import io.vertx.sqlclient.ClientBuilder;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.SqlConnectOptions;
 import io.vertx.sqlclient.impl.Utils;
 
 @Recorder
@@ -85,12 +86,12 @@ public class MySQLPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<MySQLPool>, MySQLPool> configureMySQLPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureMySQLPool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public MySQLPool apply(SyntheticCreationalContext<MySQLPool> context) {
-                MySQLPool pool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool pool = initialize((VertxInternal) vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -104,45 +105,46 @@ public class MySQLPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.mysqlclient.MySQLPool>, io.vertx.mutiny.mysqlclient.MySQLPool> mutinyMySQLPool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyMySQLPool(
             String dataSourceName) {
         return new Function<>() {
-            @Override
             @SuppressWarnings("unchecked")
-            public io.vertx.mutiny.mysqlclient.MySQLPool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.mysqlclient.MySQLPool.newInstance(
-                        (MySQLPool) context.getInjectedReference(MySQLPool.class, qualifier(dataSourceName)));
+            @Override
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private MySQLPool initialize(VertxInternal vertx,
+    private Pool initialize(VertxInternal vertx,
             Integer eventLoopCount,
             String dataSourceName,
             DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig,
-            SyntheticCreationalContext<MySQLPool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig,
                 dataSourceReactiveMySQLConfig);
         List<MySQLConnectOptions> mySQLConnectOptions = toMySQLConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig);
-        Supplier<Future<MySQLConnectOptions>> databasesSupplier = toDatabasesSupplier(mySQLConnectOptions,
+        Supplier<Future<SqlConnectOptions>> databasesSupplier = toDatabasesSupplier(mySQLConnectOptions,
                 dataSourceRuntimeConfig);
         return createPool(vertx, poolOptions, mySQLConnectOptions, dataSourceName, databasesSupplier, context);
     }
 
-    private Supplier<Future<MySQLConnectOptions>> toDatabasesSupplier(List<MySQLConnectOptions> mySQLConnectOptions,
+    @SuppressWarnings("unchecked")
+    private Supplier<Future<SqlConnectOptions>> toDatabasesSupplier(List<MySQLConnectOptions> mySQLConnectOptions,
             DataSourceRuntimeConfig dataSourceRuntimeConfig) {
-        Supplier<Future<MySQLConnectOptions>> supplier;
+        Supplier<Future<SqlConnectOptions>> supplier;
         if (dataSourceRuntimeConfig.credentialsProvider().isPresent()) {
             String beanName = dataSourceRuntimeConfig.credentialsProviderName().orElse(null);
             CredentialsProvider credentialsProvider = CredentialsProviderFinder.find(beanName);
             String name = dataSourceRuntimeConfig.credentialsProvider().get();
-            supplier = new ConnectOptionsSupplier<>(credentialsProvider, name, mySQLConnectOptions,
+            supplier = (Supplier) new ConnectOptionsSupplier<>(credentialsProvider, name, mySQLConnectOptions,
                     MySQLConnectOptions::new);
         } else {
-            supplier = Utils.roundRobinSupplier(mySQLConnectOptions);
+            supplier = (Supplier) Utils.roundRobinSupplier(mySQLConnectOptions);
         }
         return supplier;
     }
@@ -250,26 +252,78 @@ public class MySQLPoolRecorder {
                 }
             }
 
-            mysqlConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
+            ClientSSLOptions sslOptions = new ClientSSLOptions();
+            sslOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
 
-            configurePemTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
-            configureJksTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
-            configurePfxTrustOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
+            var pemTrust = dataSourceReactiveRuntimeConfig.trustCertificatePem();
+            if (pemTrust.enabled() || (pemTrust.certs().isPresent() && !pemTrust.certs().get().isEmpty())) {
+                PemTrustOptions pemTrustOptions = new PemTrustOptions();
+                if (pemTrust.certs().isPresent()) {
+                    for (String cert : pemTrust.certs().get()) {
+                        pemTrustOptions.addCertPath(cert);
+                    }
+                }
+                sslOptions.setTrustOptions(pemTrustOptions);
+            }
 
-            configurePemKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
-            configureJksKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
-            configurePfxKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
+            var jksTrust = dataSourceReactiveRuntimeConfig.trustCertificateJks();
+            if (jksTrust.enabled()) {
+                JksOptions jksOptions = new JksOptions();
+                jksTrust.path().ifPresent(jksOptions::setPath);
+                jksTrust.password().ifPresent(jksOptions::setPassword);
+                sslOptions.setTrustOptions(jksOptions);
+            }
+
+            var pfxTrust = dataSourceReactiveRuntimeConfig.trustCertificatePfx();
+            if (pfxTrust.enabled()) {
+                PfxOptions pfxOptions = new PfxOptions();
+                pfxTrust.path().ifPresent(pfxOptions::setPath);
+                pfxTrust.password().ifPresent(pfxOptions::setPassword);
+                sslOptions.setTrustOptions(pfxOptions);
+            }
+
+            var pemKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePem();
+            if (pemKeyCert.enabled()) {
+                PemKeyCertOptions pemKeyCertOptions = new PemKeyCertOptions();
+                if (pemKeyCert.certs().isPresent()) {
+                    for (String cert : pemKeyCert.certs().get()) {
+                        pemKeyCertOptions.addCertPath(cert);
+                    }
+                }
+                if (pemKeyCert.keys().isPresent()) {
+                    for (String key : pemKeyCert.keys().get()) {
+                        pemKeyCertOptions.addKeyPath(key);
+                    }
+                }
+                sslOptions.setKeyCertOptions(pemKeyCertOptions);
+            }
+
+            var jksKeyCert = dataSourceReactiveRuntimeConfig.keyCertificateJks();
+            if (jksKeyCert.enabled()) {
+                JksOptions jksOptions = new JksOptions();
+                jksKeyCert.path().ifPresent(jksOptions::setPath);
+                jksKeyCert.password().ifPresent(jksOptions::setPassword);
+                sslOptions.setKeyCertOptions(jksOptions);
+            }
+
+            var pfxKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePfx();
+            if (pfxKeyCert.enabled()) {
+                PfxOptions pfxOptions = new PfxOptions();
+                pfxKeyCert.path().ifPresent(pfxOptions::setPath);
+                pfxKeyCert.password().ifPresent(pfxOptions::setPassword);
+                sslOptions.setKeyCertOptions(pfxOptions);
+            }
+
+            var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
+            if (!"NONE".equalsIgnoreCase(algo)) {
+                sslOptions.setHostnameVerificationAlgorithm(algo);
+            }
+
+            mysqlConnectOptions.setSslOptions(sslOptions);
 
             mysqlConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts());
 
             mysqlConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval().toMillis());
-
-            var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
-            if ("NONE".equalsIgnoreCase(algo)) {
-                mysqlConnectOptions.setHostnameVerificationAlgorithm("");
-            } else {
-                mysqlConnectOptions.setHostnameVerificationAlgorithm(algo);
-            }
 
             dataSourceReactiveMySQLConfig.authenticationPlugin().ifPresent(mysqlConnectOptions::setAuthenticationPlugin);
 
@@ -285,16 +339,20 @@ public class MySQLPoolRecorder {
         return mysqlConnectOptionsList;
     }
 
-    private MySQLPool createPool(Vertx vertx, PoolOptions poolOptions, List<MySQLConnectOptions> mySQLConnectOptionsList,
-            String dataSourceName, Supplier<Future<MySQLConnectOptions>> databases,
-            SyntheticCreationalContext<MySQLPool> context) {
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, List<MySQLConnectOptions> mySQLConnectOptionsList,
+            String dataSourceName, Supplier<Future<SqlConnectOptions>> databases,
+            SyntheticCreationalContext<Pool> context) {
         Instance<MySQLPoolCreator> instance = context.getInjectedReference(POOL_CREATOR_TYPE_LITERAL,
                 qualifier(dataSourceName));
         if (instance.isResolvable()) {
             MySQLPoolCreator.Input input = new DefaultInput(vertx, poolOptions, mySQLConnectOptionsList);
-            return (MySQLPool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (MySQLPool) MySQLDriver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return MySQLBuilder.pool()
+                .with(poolOptions)
+                .connectingTo(databases)
+                .using(vertx)
+                .build();
     }
 
     private static class DefaultInput implements MySQLPoolCreator.Input {
@@ -321,6 +379,15 @@ public class MySQLPoolRecorder {
         @Override
         public List<MySQLConnectOptions> mySQLConnectOptionsList() {
             return mySQLConnectOptionsList;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public ClientBuilder<Pool> clientBuilder() {
+            return MySQLBuilder.pool()
+                    .with(poolOptions)
+                    .connectingTo((List<SqlConnectOptions>) (List<?>) mySQLConnectOptionsList)
+                    .using(vertx);
         }
     }
 

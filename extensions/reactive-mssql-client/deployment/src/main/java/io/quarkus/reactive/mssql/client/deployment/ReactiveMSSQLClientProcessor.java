@@ -61,7 +61,6 @@ import io.quarkus.reactive.mssql.client.runtime.MsSQLServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.mssqlclient.MSSQLPool;
 import io.vertx.mssqlclient.spi.MSSQLDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,13 +70,9 @@ class ReactiveMSSQLClientProcessor {
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { MSSQL_POOL_CREATOR }, null);
 
-    private static final DotName VERTX_MSSQL_POOL = DotName.createSimple(MSSQLPool.class);
-    private static final Type VERTX_MSSQL_POOL_TYPE = ClassType.create(VERTX_MSSQL_POOL);
-
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<MSSQLPoolBuildItem> msSQLPool,
             BuildProducer<VertxPoolBuildItem> vertxPool,
             MSSQLPoolRecorder recorder,
             VertxBuildItem vertx,
@@ -100,7 +95,7 @@ class ReactiveMSSQLClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, msSQLPool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             msSQLPoolNamesBuilder.add(dataSourceName);
         }
@@ -201,17 +196,14 @@ class ReactiveMSSQLClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<MSSQLPoolBuildItem> msSQLPool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<MSSQLPool>, MSSQLPool> poolFunction = recorder.configureMSSQLPool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configureMSSQLPool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        msSQLPool.produce(new MSSQLPoolBuildItem(dataSourceName, poolFunction));
 
-        ExtendedBeanConfigurator msSQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(MSSQLPool.class)
+        ExtendedBeanConfigurator msSQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
-                .addType(Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
                 .addInjectionPoint(POOL_CREATOR_INJECTION_TYPE, qualifier(dataSourceName))
@@ -223,13 +215,13 @@ class ReactiveMSSQLClientProcessor {
 
         syntheticBeans.produce(msSQLPoolBeanConfigurator.done());
 
+        // the Mutiny pool is created by using the Vertx pool
         ExtendedBeanConfigurator mutinyMSSQLPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.mssqlclient.MSSQLPool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
-                .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
-                .addInjectionPoint(VERTX_MSSQL_POOL_TYPE, qualifier(dataSourceName))
+                .addInjectionPoint(ClassType.create(DotName.createSimple(Pool.class)), qualifier(dataSourceName))
                 .checkActive(recorder.poolCheckActiveSupplier(dataSourceName))
                 .createWith(recorder.mutinyMSSQLPool(dataSourceName))
                 .unremovable()

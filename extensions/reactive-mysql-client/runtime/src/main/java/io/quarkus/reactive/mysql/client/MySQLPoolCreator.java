@@ -5,6 +5,7 @@ import java.util.List;
 import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.vertx.core.Vertx;
 import io.vertx.mysqlclient.MySQLConnectOptions;
+import io.vertx.sqlclient.ClientBuilder;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 
@@ -28,5 +29,7 @@ public interface MySQLPoolCreator {
         PoolOptions poolOptions();
 
         List<MySQLConnectOptions> mySQLConnectOptionsList();
+
+        ClientBuilder<Pool> clientBuilder();
     }
 }

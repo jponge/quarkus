@@ -9,7 +9,8 @@ public class LocalhostOraclePoolCreator implements OraclePoolCreator {
 
     @Override
     public Pool create(Input input) {
-        return Pool.pool(input.vertx(), input.oracleConnectOptions().setHost("localhost").setPort(1521),
-                input.poolOptions());
+        return input.clientBuilder()
+                .connectingTo(input.oracleConnectOptions().setHost("localhost").setPort(1521))
+                .build();
     }
 }

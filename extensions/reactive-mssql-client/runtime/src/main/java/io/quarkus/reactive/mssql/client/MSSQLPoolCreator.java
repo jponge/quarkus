@@ -3,6 +3,7 @@ package io.quarkus.reactive.mssql.client;
 import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.vertx.core.Vertx;
 import io.vertx.mssqlclient.MSSQLConnectOptions;
+import io.vertx.sqlclient.ClientBuilder;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 
@@ -26,5 +27,7 @@ public interface MSSQLPoolCreator {
         PoolOptions poolOptions();
 
         MSSQLConnectOptions msSQLConnectOptions();
+
+        ClientBuilder<Pool> clientBuilder();
     }
 }

@@ -49,7 +49,7 @@ public class MultipleDataSourcesAndMySQLPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            mySQLClient.query("SELECT 1").execute(ar -> {
+            mySQLClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -69,7 +69,7 @@ public class MultipleDataSourcesAndMySQLPoolCreatorsTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            mySQLClient.query("SELECT 1").execute(ar -> {
+            mySQLClient.query("SELECT 1").execute().onComplete(ar -> {
                 if (ar.failed()) {
                     cf.completeExceptionally(ar.cause());
                 } else {
@@ -86,8 +86,9 @@ public class MultipleDataSourcesAndMySQLPoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(12345, input.mySQLConnectOptionsList().get(0).getPort()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.mySQLConnectOptionsList().get(0).setHost("localhost").setPort(3308),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.mySQLConnectOptionsList().get(0).setHost("localhost").setPort(3308))
+                    .build();
         }
     }
 
@@ -98,8 +99,9 @@ public class MultipleDataSourcesAndMySQLPoolCreatorsTest {
         @Override
         public Pool create(Input input) {
             assertEquals(55555, input.mySQLConnectOptionsList().get(0).getPort()); // validate that the bean has been called for the proper datasource
-            return Pool.pool(input.vertx(), input.mySQLConnectOptionsList().get(0).setHost("localhost").setPort(3308),
-                    input.poolOptions());
+            return input.clientBuilder()
+                    .connectingTo(input.mySQLConnectOptionsList().get(0).setHost("localhost").setPort(3308))
+                    .build();
         }
     }
 }

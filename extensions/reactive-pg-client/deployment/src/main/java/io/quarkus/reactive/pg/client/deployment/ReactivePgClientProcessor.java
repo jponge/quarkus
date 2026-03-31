@@ -62,7 +62,6 @@ import io.quarkus.reactive.pg.client.runtime.PostgreSQLServiceBindingConverter;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.pgclient.PgPool;
 import io.vertx.pgclient.spi.PgDriver;
 import io.vertx.sqlclient.Pool;
 
@@ -71,9 +70,6 @@ class ReactivePgClientProcessor {
     private static final Type PG_POOL_CREATOR = ClassType.create(DotName.createSimple(PgPoolCreator.class.getName()));
     private static final ParameterizedType POOL_CREATOR_INJECTION_TYPE = ParameterizedType.create(INJECT_INSTANCE,
             new Type[] { PG_POOL_CREATOR }, null);
-
-    private static final DotName VERTX_PG_POOL = DotName.createSimple(PgPool.class);
-    private static final Type VERTX_PG_POOL_TYPE = ClassType.create(VERTX_PG_POOL);
 
     @BuildStep
     NativeImageConfigBuildItem config() {
@@ -89,7 +85,6 @@ class ReactivePgClientProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<PgPoolBuildItem> pgPool,
             BuildProducer<VertxPoolBuildItem> vertxPool,
             PgPoolRecorder recorder,
             VertxBuildItem vertx,
@@ -112,7 +107,7 @@ class ReactivePgClientProcessor {
                 continue;
             }
 
-            createPool(recorder, vertx, eventLoopCount, shutdown, pgPool, syntheticBeans, dataSourceName);
+            createPool(recorder, vertx, eventLoopCount, shutdown, syntheticBeans, dataSourceName);
 
             pgPoolNamesBuilder.add(dataSourceName);
         }
@@ -207,17 +202,14 @@ class ReactivePgClientProcessor {
             VertxBuildItem vertx,
             EventLoopCountBuildItem eventLoopCount,
             ShutdownContextBuildItem shutdown,
-            BuildProducer<PgPoolBuildItem> pgPool,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             String dataSourceName) {
 
-        Function<SyntheticCreationalContext<PgPool>, PgPool> poolFunction = recorder.configurePgPool(vertx.getVertx(),
+        Function<SyntheticCreationalContext<Pool>, Pool> poolFunction = recorder.configurePgPool(vertx.getVertx(),
                 eventLoopCount.getEventLoopCount(), dataSourceName, shutdown);
-        pgPool.produce(new PgPoolBuildItem(dataSourceName, poolFunction));
 
-        ExtendedBeanConfigurator pgPoolBeanConfigurator = SyntheticBeanBuildItem.configure(PgPool.class)
+        ExtendedBeanConfigurator pgPoolBeanConfigurator = SyntheticBeanBuildItem.configure(Pool.class)
                 .defaultBean()
-                .addType(Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
                 .addInjectionPoint(POOL_CREATOR_INJECTION_TYPE, qualifier(dataSourceName))
@@ -231,12 +223,11 @@ class ReactivePgClientProcessor {
 
         // the Mutiny pool is created by using the Vertx pool
         ExtendedBeanConfigurator mutinyPgPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.pgclient.PgPool.class)
+                .configure(io.vertx.mutiny.sqlclient.Pool.class)
                 .defaultBean()
-                .addType(io.vertx.mutiny.sqlclient.Pool.class)
                 .scope(ApplicationScoped.class)
                 .qualifiers(qualifiers(dataSourceName))
-                .addInjectionPoint(VERTX_PG_POOL_TYPE, qualifier(dataSourceName))
+                .addInjectionPoint(ClassType.create(DotName.createSimple(Pool.class)), qualifier(dataSourceName))
                 .checkActive(recorder.poolCheckActiveSupplier(dataSourceName))
                 .createWith(recorder.mutinyPgPool(dataSourceName))
                 .unremovable()

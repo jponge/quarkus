@@ -4,12 +4,6 @@ import static io.quarkus.credentials.CredentialsProvider.PASSWORD_PROPERTY_NAME;
 import static io.quarkus.credentials.CredentialsProvider.USER_PROPERTY_NAME;
 import static io.quarkus.reactive.datasource.runtime.ReactiveDataSourceUtil.qualifier;
 import static io.quarkus.reactive.datasource.runtime.UnitisedTime.unitised;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configureJksTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemTrustOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertOptions;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,12 +32,19 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.internal.VertxInternal;
+import io.vertx.core.net.ClientSSLOptions;
+import io.vertx.core.net.JksOptions;
+import io.vertx.core.net.PemKeyCertOptions;
+import io.vertx.core.net.PemTrustOptions;
+import io.vertx.core.net.PfxOptions;
+import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
-import io.vertx.pgclient.PgPool;
 import io.vertx.pgclient.SslMode;
-import io.vertx.pgclient.spi.PgDriver;
+import io.vertx.sqlclient.ClientBuilder;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.SqlConnectOptions;
 import io.vertx.sqlclient.impl.Utils;
 
 @Recorder
@@ -84,12 +85,12 @@ public class PgPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<PgPool>, PgPool> configurePgPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configurePgPool(RuntimeValue<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown) {
         return new Function<>() {
             @Override
-            public PgPool apply(SyntheticCreationalContext<PgPool> context) {
-                PgPool pgPool = initialize((VertxInternal) vertx.getValue(),
+            public Pool apply(SyntheticCreationalContext<Pool> context) {
+                Pool pgPool = initialize((VertxInternal) vertx.getValue(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
@@ -103,44 +104,45 @@ public class PgPoolRecorder {
         };
     }
 
-    public Function<SyntheticCreationalContext<io.vertx.mutiny.pgclient.PgPool>, io.vertx.mutiny.pgclient.PgPool> mutinyPgPool(
+    public Function<SyntheticCreationalContext<io.vertx.mutiny.sqlclient.Pool>, io.vertx.mutiny.sqlclient.Pool> mutinyPgPool(
             String dataSourceName) {
         return new Function<>() {
             @SuppressWarnings("unchecked")
             @Override
-            public io.vertx.mutiny.pgclient.PgPool apply(SyntheticCreationalContext context) {
-                return io.vertx.mutiny.pgclient.PgPool.newInstance(
-                        (PgPool) context.getInjectedReference(PgPool.class, qualifier(dataSourceName)));
+            public io.vertx.mutiny.sqlclient.Pool apply(SyntheticCreationalContext context) {
+                return io.vertx.mutiny.sqlclient.Pool.newInstance(
+                        (Pool) context.getInjectedReference(Pool.class, qualifier(dataSourceName)));
             }
         };
     }
 
-    private PgPool initialize(VertxInternal vertx,
+    private Pool initialize(VertxInternal vertx,
             Integer eventLoopCount,
             String dataSourceName,
             DataSourceRuntimeConfig dataSourceRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactivePostgreSQLConfig dataSourceReactivePostgreSQLConfig,
-            SyntheticCreationalContext<PgPool> context) {
+            SyntheticCreationalContext<Pool> context) {
         PoolOptions poolOptions = toPoolOptions(eventLoopCount, dataSourceReactiveRuntimeConfig);
         List<PgConnectOptions> pgConnectOptionsList = toPgConnectOptions(dataSourceName, dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactivePostgreSQLConfig);
-        Supplier<Future<PgConnectOptions>> databasesSupplier = toDatabasesSupplier(pgConnectOptionsList,
+        Supplier<Future<SqlConnectOptions>> databasesSupplier = toDatabasesSupplier(pgConnectOptionsList,
                 dataSourceRuntimeConfig);
         return createPool(vertx, poolOptions, pgConnectOptionsList, dataSourceName, databasesSupplier, context);
     }
 
-    private Supplier<Future<PgConnectOptions>> toDatabasesSupplier(List<PgConnectOptions> pgConnectOptionsList,
+    @SuppressWarnings("unchecked")
+    private Supplier<Future<SqlConnectOptions>> toDatabasesSupplier(List<PgConnectOptions> pgConnectOptionsList,
             DataSourceRuntimeConfig dataSourceRuntimeConfig) {
-        Supplier<Future<PgConnectOptions>> supplier;
+        Supplier<Future<SqlConnectOptions>> supplier;
         if (dataSourceRuntimeConfig.credentialsProvider().isPresent()) {
             String beanName = dataSourceRuntimeConfig.credentialsProviderName().orElse(null);
             CredentialsProvider credentialsProvider = CredentialsProviderFinder.find(beanName);
             String name = dataSourceRuntimeConfig.credentialsProvider().get();
-            supplier = new ConnectOptionsSupplier<>(credentialsProvider, name, pgConnectOptionsList,
+            supplier = (Supplier) new ConnectOptionsSupplier<>(credentialsProvider, name, pgConnectOptionsList,
                     PgConnectOptions::new);
         } else {
-            supplier = Utils.roundRobinSupplier(pgConnectOptionsList);
+            supplier = (Supplier) Utils.roundRobinSupplier(pgConnectOptionsList);
         }
         return supplier;
     }
@@ -238,26 +240,78 @@ public class PgPoolRecorder {
 
             pgConnectOptions.setUseLayer7Proxy(dataSourceReactivePostgreSQLConfig.useLayer7Proxy());
 
-            pgConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
+            ClientSSLOptions sslOptions = new ClientSSLOptions();
+            sslOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll());
 
-            configurePemTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem());
-            configureJksTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks());
-            configurePfxTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx());
+            var pemTrust = dataSourceReactiveRuntimeConfig.trustCertificatePem();
+            if (pemTrust.enabled() || (pemTrust.certs().isPresent() && !pemTrust.certs().get().isEmpty())) {
+                PemTrustOptions pemTrustOptions = new PemTrustOptions();
+                if (pemTrust.certs().isPresent()) {
+                    for (String cert : pemTrust.certs().get()) {
+                        pemTrustOptions.addCertPath(cert);
+                    }
+                }
+                sslOptions.setTrustOptions(pemTrustOptions);
+            }
 
-            configurePemKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem());
-            configureJksKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks());
-            configurePfxKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx());
+            var jksTrust = dataSourceReactiveRuntimeConfig.trustCertificateJks();
+            if (jksTrust.enabled()) {
+                JksOptions jksOptions = new JksOptions();
+                jksTrust.path().ifPresent(jksOptions::setPath);
+                jksTrust.password().ifPresent(jksOptions::setPassword);
+                sslOptions.setTrustOptions(jksOptions);
+            }
+
+            var pfxTrust = dataSourceReactiveRuntimeConfig.trustCertificatePfx();
+            if (pfxTrust.enabled()) {
+                PfxOptions pfxOptions = new PfxOptions();
+                pfxTrust.path().ifPresent(pfxOptions::setPath);
+                pfxTrust.password().ifPresent(pfxOptions::setPassword);
+                sslOptions.setTrustOptions(pfxOptions);
+            }
+
+            var pemKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePem();
+            if (pemKeyCert.enabled()) {
+                PemKeyCertOptions pemKeyCertOptions = new PemKeyCertOptions();
+                if (pemKeyCert.certs().isPresent()) {
+                    for (String cert : pemKeyCert.certs().get()) {
+                        pemKeyCertOptions.addCertPath(cert);
+                    }
+                }
+                if (pemKeyCert.keys().isPresent()) {
+                    for (String key : pemKeyCert.keys().get()) {
+                        pemKeyCertOptions.addKeyPath(key);
+                    }
+                }
+                sslOptions.setKeyCertOptions(pemKeyCertOptions);
+            }
+
+            var jksKeyCert = dataSourceReactiveRuntimeConfig.keyCertificateJks();
+            if (jksKeyCert.enabled()) {
+                JksOptions jksOptions = new JksOptions();
+                jksKeyCert.path().ifPresent(jksOptions::setPath);
+                jksKeyCert.password().ifPresent(jksOptions::setPassword);
+                sslOptions.setKeyCertOptions(jksOptions);
+            }
+
+            var pfxKeyCert = dataSourceReactiveRuntimeConfig.keyCertificatePfx();
+            if (pfxKeyCert.enabled()) {
+                PfxOptions pfxOptions = new PfxOptions();
+                pfxKeyCert.path().ifPresent(pfxOptions::setPath);
+                pfxKeyCert.password().ifPresent(pfxOptions::setPassword);
+                sslOptions.setKeyCertOptions(pfxOptions);
+            }
+
+            var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
+            if (!"NONE".equalsIgnoreCase(algo)) {
+                sslOptions.setHostnameVerificationAlgorithm(algo);
+            }
+
+            pgConnectOptions.setSslOptions(sslOptions);
 
             pgConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts());
 
             pgConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval().toMillis());
-
-            var algo = dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm();
-            if ("NONE".equalsIgnoreCase(algo)) {
-                pgConnectOptions.setHostnameVerificationAlgorithm("");
-            } else {
-                pgConnectOptions.setHostnameVerificationAlgorithm(algo);
-            }
 
             dataSourceReactiveRuntimeConfig.additionalProperties().forEach(pgConnectOptions::addProperty);
 
@@ -272,16 +326,20 @@ public class PgPoolRecorder {
         return pgConnectOptionsList;
     }
 
-    private PgPool createPool(Vertx vertx, PoolOptions poolOptions, List<PgConnectOptions> pgConnectOptionsList,
-            String dataSourceName, Supplier<Future<PgConnectOptions>> databases,
-            SyntheticCreationalContext<PgPool> context) {
+    private Pool createPool(Vertx vertx, PoolOptions poolOptions, List<PgConnectOptions> pgConnectOptionsList,
+            String dataSourceName, Supplier<Future<SqlConnectOptions>> databases,
+            SyntheticCreationalContext<Pool> context) {
         Instance<PgPoolCreator> instance = context.getInjectedReference(PG_POOL_CREATOR_TYPE_LITERAL,
                 qualifier(dataSourceName));
         if (instance.isResolvable()) {
             PgPoolCreator.Input input = new DefaultInput(vertx, poolOptions, pgConnectOptionsList);
-            return (PgPool) instance.get().create(input);
+            return instance.get().create(input);
         }
-        return (PgPool) PgDriver.INSTANCE.createPool(vertx, databases, poolOptions);
+        return PgBuilder.pool()
+                .with(poolOptions)
+                .connectingTo(databases)
+                .using(vertx)
+                .build();
     }
 
     private static class DefaultInput implements PgPoolCreator.Input {
@@ -308,6 +366,15 @@ public class PgPoolRecorder {
         @Override
         public List<PgConnectOptions> pgConnectOptionsList() {
             return pgConnectOptionsList;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public ClientBuilder<Pool> clientBuilder() {
+            return PgBuilder.pool()
+                    .with(poolOptions)
+                    .connectingTo((List<SqlConnectOptions>) (List<?>) pgConnectOptionsList)
+                    .using(vertx);
         }
     }
 
