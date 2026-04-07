@@ -1,4 +1,4 @@
-package io.quarkus.vertx.http.runtime;
+package io.quarkus.vertx.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,7 +10,6 @@ import java.util.Deque;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.quarkus.runtime.BlockingOperationNotAllowedException;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
@@ -19,41 +18,33 @@ import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.http.HttpVersion;
 import io.vertx.core.net.impl.ConnectionBase;
-import io.vertx.ext.web.RoutingContext;
 
+/**
+ * A blocking {@link InputStream} that reads from a Vert.x {@link HttpServerRequest}.
+ * <p>
+ * Consumer-specific behavior (continue-state management, max request size, timeout) is
+ * provided via a {@link VertxInputContext}.
+ */
 public class VertxInputStream extends InputStream {
 
-    public static final String CONTINUE = "100-continue";
+    private final VertxInputContext inputContext;
     private final VertxBlockingInput exchange;
 
     private boolean closed;
     private boolean finished;
     private ByteBuf pooled;
     private final long limit;
-    private ContinueState continueState = ContinueState.NONE;
 
-    public VertxInputStream(RoutingContext request, long timeout) {
-        this.exchange = new VertxBlockingInput(request.request(), timeout);
-        Long limitObj = request.get(VertxHttpRecorder.MAX_REQUEST_SIZE_KEY);
-        if (limitObj == null) {
-            limit = -1;
-        } else {
-            limit = limitObj;
-        }
-        String expect = request.request().getHeader(HttpHeaderNames.EXPECT);
-        if (expect != null && expect.equalsIgnoreCase(CONTINUE)) {
-            continueState = ContinueState.REQUIRED;
-        }
+    public VertxInputStream(VertxInputContext context) {
+        this.inputContext = context;
+        this.exchange = new VertxBlockingInput(context.getRoutingContext().request(), context.getTimeout());
+        this.limit = context.getMaxRequestSize();
     }
 
-    public VertxInputStream(RoutingContext request, long timeout, ByteBuf existing) {
-        this.exchange = new VertxBlockingInput(request.request(), timeout);
-        Long limitObj = request.get(VertxHttpRecorder.MAX_REQUEST_SIZE_KEY);
-        if (limitObj == null) {
-            limit = -1;
-        } else {
-            limit = limitObj;
-        }
+    public VertxInputStream(VertxInputContext context, ByteBuf existing) {
+        this.inputContext = context;
+        this.exchange = new VertxBlockingInput(context.getRoutingContext().request(), context.getTimeout());
+        this.limit = context.getMaxRequestSize();
         this.pooled = existing;
     }
 
@@ -77,15 +68,14 @@ public class VertxInputStream extends InputStream {
         if (closed) {
             throw new IOException("Stream is closed");
         }
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
+        if (inputContext.getContinueState() == VertxInputContext.ContinueState.REQUIRED) {
+            inputContext.setContinueState(VertxInputContext.ContinueState.SENT);
             exchange.request.response().writeContinue();
         }
         readIntoBuffer();
         if (limit > 0 && exchange.request.bytesRead() > limit) {
             HttpServerResponse response = exchange.request.response();
             if (response.headWritten()) {
-                //the response has been written, not much we can do
                 exchange.request.connection().close();
                 throw new IOException("Request too large");
             } else {
@@ -154,7 +144,6 @@ public class VertxInputStream extends InputStream {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            //our exchange is all broken, just end it
             throw e;
         } finally {
             if (pooled != null) {
@@ -231,8 +220,6 @@ public class VertxInputStream extends InputStream {
                 while (input1 == null && !eof && readException == null) {
                     long rem = expire - System.currentTimeMillis();
                     if (rem <= 0) {
-                        //everything is broken, if read has timed out we can assume that the underling connection
-                        //is wrecked, so just close it
                         request.connection().close();
                         IOException throwable = new IOException("Read timed out");
                         readException = throwable;
@@ -241,7 +228,8 @@ public class VertxInputStream extends InputStream {
 
                     try {
                         if (Context.isOnEventLoopThread()) {
-                            throw new BlockingOperationNotAllowedException("Attempting a blocking read on io thread");
+                            throw new BlockingOperationNotAllowedException(
+                                    "Attempting a blocking read on io thread");
                         }
                         waiting = true;
                         request.connection().wait(rem);
@@ -272,7 +260,6 @@ public class VertxInputStream extends InputStream {
         public void handle(Buffer event) {
             synchronized (request.connection()) {
                 if (event.length() == 0 && request.version() == HttpVersion.HTTP_2) {
-                    // When using HTTP/2 H2, this indicates that we won't receive anymore data.
                     eof = true;
                     if (waiting) {
                         request.connection().notifyAll();
@@ -307,15 +294,9 @@ public class VertxInputStream extends InputStream {
             try {
                 return Integer.parseInt(length);
             } catch (NumberFormatException e) {
-                Long.parseLong(length); // ignore the value as can only return an int anyway
+                Long.parseLong(length);
                 return Integer.MAX_VALUE;
             }
         }
-    }
-
-    enum ContinueState {
-        NONE,
-        REQUIRED,
-        SENT;
     }
 }

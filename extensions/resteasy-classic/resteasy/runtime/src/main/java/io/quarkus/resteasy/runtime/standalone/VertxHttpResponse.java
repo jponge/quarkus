@@ -40,7 +40,7 @@ public class VertxHttpResponse implements HttpResponse {
         this.routingContext = routingContext;
         outputHeaders = new MultivaluedHashMap<String, Object>();
         this.method = method;
-        os = (method == null || !method.equals(HttpMethod.HEAD)) ? new VertxOutputStream(this, allocator)
+        os = (method == null || !method.equals(HttpMethod.HEAD)) ? new AsyncVertxOutputStream(this, allocator)
                 : null;
         this.request = request;
         this.response = request.response();

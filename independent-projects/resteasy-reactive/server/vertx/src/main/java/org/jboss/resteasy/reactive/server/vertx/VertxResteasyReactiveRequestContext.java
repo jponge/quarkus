@@ -41,6 +41,8 @@ import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.ScheduledFuture;
 import io.quarkus.vertx.utils.NoBoundChecksBuffer;
+import io.quarkus.vertx.utils.VertxInputContext;
+import io.quarkus.vertx.utils.VertxInputStream;
 import io.quarkus.vertx.utils.VertxJavaIoContext;
 import io.quarkus.vertx.utils.VertxOutputStream;
 import io.vertx.core.AsyncResult;
@@ -67,7 +69,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
     private final Executor contextExecutor;
     private final ClassLoader devModeTccl;
     protected Consumer<ResteasyReactiveRequestContext> preCommitTask;
-    ContinueState continueState = ContinueState.NONE;
+    VertxInputContext.ContinueState continueState = VertxInputContext.ContinueState.NONE;
 
     public VertxResteasyReactiveRequestContext(Deployment deployment,
             RoutingContext context,
@@ -82,7 +84,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         String expect = request.getHeader(HttpHeaderNames.EXPECT);
         Context current = Vertx.currentContext();
         if (expect != null && expect.equalsIgnoreCase(CONTINUE)) {
-            continueState = ContinueState.REQUIRED;
+            continueState = VertxInputContext.ContinueState.REQUIRED;
         }
         this.contextExecutor = new Executor() {
             @Override
@@ -281,8 +283,8 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         if (existingData == null) {
             return createInputStream();
         }
-        return new VertxInputStream(context, getDeployment().getRuntimeConfiguration().readTimeout().toMillis(),
-                Unpooled.wrappedBuffer(existingData), this);
+        return new VertxInputStream(new ResteasyReactiveInputContext(),
+                Unpooled.wrappedBuffer(existingData));
     }
 
     @Override
@@ -292,7 +294,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
             context.getBody().getBytes(data);
             return new ByteArrayInputStream(data);
         }
-        return new VertxInputStream(context, getDeployment().getRuntimeConfiguration().readTimeout().toMillis(), this);
+        return new VertxInputStream(new ResteasyReactiveInputContext());
     }
 
     @Override
@@ -303,8 +305,8 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public ServerHttpResponse resumeRequestInput() {
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
+        if (continueState == VertxInputContext.ContinueState.REQUIRED) {
+            continueState = VertxInputContext.ContinueState.SENT;
             response.writeContinue();
         }
         request.resume();
@@ -319,8 +321,8 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
             return this;
         }
         request.pause();
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
+        if (continueState == VertxInputContext.ContinueState.REQUIRED) {
+            continueState = VertxInputContext.ContinueState.SENT;
             response.writeContinue();
         }
         request.handler(new Handler<Buffer>() {
@@ -564,10 +566,33 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         return response;
     }
 
-    enum ContinueState {
-        NONE,
-        REQUIRED,
-        SENT;
+    final class ResteasyReactiveInputContext implements VertxInputContext {
+
+        @Override
+        public RoutingContext getRoutingContext() {
+            return context;
+        }
+
+        @Override
+        public long getTimeout() {
+            return getDeployment().getRuntimeConfiguration().readTimeout().toMillis();
+        }
+
+        @Override
+        public long getMaxRequestSize() {
+            Long limitObj = context.get("io.quarkus.max-request-size");
+            return (limitObj == null) ? -1 : limitObj;
+        }
+
+        @Override
+        public ContinueState getContinueState() {
+            return VertxResteasyReactiveRequestContext.this.continueState;
+        }
+
+        @Override
+        public void setContinueState(ContinueState state) {
+            VertxResteasyReactiveRequestContext.this.continueState = state;
+        }
     }
 
     final class ResteasyVertxJavaIoContext extends VertxJavaIoContext {

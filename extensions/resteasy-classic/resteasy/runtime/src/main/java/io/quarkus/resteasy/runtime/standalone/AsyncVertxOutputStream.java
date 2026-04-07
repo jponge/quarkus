@@ -12,7 +12,14 @@ import org.jboss.resteasy.spi.AsyncOutputStream;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-public class VertxOutputStream extends AsyncOutputStream {
+/**
+ * An {@link AsyncOutputStream} for RESTEasy Classic that writes through
+ * {@link VertxHttpResponse} for both synchronous and asynchronous operations.
+ * <p>
+ * This replaces the old {@code VertxOutputStream} class. The canonical framework-agnostic
+ * output stream is {@link io.quarkus.vertx.utils.VertxOutputStream} in vertx-utils.
+ */
+public class AsyncVertxOutputStream extends AsyncOutputStream {
 
     private final VertxHttpResponse response;
     private final BufferAllocator allocator;
@@ -22,34 +29,24 @@ public class VertxOutputStream extends AsyncOutputStream {
 
     private boolean closed;
 
-    /**
-     * Construct a new instance. No write timeout is configured.
-     *
-     */
-    public VertxOutputStream(VertxHttpResponse response, BufferAllocator allocator) {
+    public AsyncVertxOutputStream(VertxHttpResponse response, BufferAllocator allocator) {
         this.allocator = allocator;
         this.response = response;
         Object length = response.getOutputHeaders().getFirst(HttpHeaders.CONTENT_LENGTH);
         this.contentLength = length == null ? -1 : Long.parseLong(length.toString());
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    @Override
     public void write(final int b) throws IOException {
         write(new byte[] { (byte) b }, 0, 1);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    @Override
     public void write(final byte[] b) throws IOException {
         write(b, 0, b.length);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    @Override
     public void write(final byte[] b, final int off, final int len) throws IOException {
         if (len < 1) {
             return;
@@ -95,9 +92,7 @@ public class VertxOutputStream extends AsyncOutputStream {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    @Override
     public void flush() throws IOException {
         if (closed) {
             throw new IOException("Stream is closed");
@@ -116,9 +111,7 @@ public class VertxOutputStream extends AsyncOutputStream {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    @Override
     public void close() throws IOException {
         if (closed)
             return;

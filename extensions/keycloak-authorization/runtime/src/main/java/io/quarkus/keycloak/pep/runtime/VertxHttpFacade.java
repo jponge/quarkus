@@ -9,7 +9,8 @@ import org.keycloak.adapters.authorization.spi.HttpRequest;
 import org.keycloak.adapters.authorization.spi.HttpResponse;
 
 import io.netty.handler.codec.http.HttpHeaderNames;
-import io.quarkus.vertx.http.runtime.VertxInputStream;
+import io.quarkus.vertx.http.runtime.DefaultVertxInputContext;
+import io.quarkus.vertx.utils.VertxInputStream;
 import io.vertx.core.http.Cookie;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
@@ -162,7 +163,7 @@ public class VertxHttpFacade implements HttpRequest, HttpResponse {
                     if (routingContext.request().isEnded()) {
                         return new ByteArrayInputStream(new byte[0]);
                     }
-                    return new VertxInputStream(routingContext, readTimeout);
+                    return new VertxInputStream(new DefaultVertxInputContext(routingContext, readTimeout));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

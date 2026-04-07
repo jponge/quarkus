@@ -30,8 +30,9 @@ import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
-import io.quarkus.vertx.http.runtime.VertxInputStream;
+import io.quarkus.vertx.http.runtime.DefaultVertxInputContext;
 import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
+import io.quarkus.vertx.utils.VertxInputStream;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
@@ -81,7 +82,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         if (request.getBody() != null) {
             is = new ByteArrayInputStream(request.getBody().getBytes());
         } else {
-            is = new VertxInputStream(request, readTimeout);
+            is = new VertxInputStream(new DefaultVertxInputContext(request, readTimeout));
         }
         if (BlockingOperationControl.isBlockingAllowed()) {
             try {
