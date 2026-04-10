@@ -1,12 +1,5 @@
 package io.quarkus.vertx.utils;
 
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.io.OutputStream;
-import java.util.Optional;
-
-import org.jboss.logging.Logger;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponse;
@@ -16,6 +9,12 @@ import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import org.jboss.logging.Logger;
+
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
+import java.util.Optional;
 
 /**
  * An {@link OutputStream} forwarding the bytes to Vert.x Web {@link HttpResponse}.
@@ -23,7 +22,7 @@ import io.vertx.core.http.HttpServerResponse;
  */
 public class VertxOutputStream extends OutputStream {
 
-    private static final Logger log = Logger.getLogger("org.jboss.resteasy.reactive.server.vertx.ResteasyReactiveOutputStream");
+    private static final Logger log = Logger.getLogger(VertxOutputStream.class);
 
     private final VertxJavaIoContext context;
     private final HttpServerRequest request;
@@ -35,6 +34,8 @@ public class VertxOutputStream extends OutputStream {
     private boolean waitingForDrain;
     private Throwable throwable;
 
+    private final Object lock = new Object();
+
     public VertxOutputStream(VertxJavaIoContext context) {
         this.context = context;
         this.request = context.getRoutingContext().request();
@@ -42,29 +43,40 @@ public class VertxOutputStream extends OutputStream {
                 context.getMinChunkSize(),
                 context.getOutputBufferCapacity());
         response = request.response();
+
         response.exceptionHandler(new Handler<>() {
             @Override
             public void handle(Throwable event) {
                 throwable = event;
                 log.debugf(event, "IO Exception ");
                 request.connection().close();
-                synchronized (request.connection()) {
+                synchronized (lock) {
                     if (waitingForDrain) {
-                        request.connection().notifyAll();
+                        lock.notifyAll();
                     }
                 }
             }
         });
-        Handler<Void> handler = new DrainHandler(this);
+
+        Handler<Void> handler = new Handler<Void>() {
+            @Override
+            public void handle(Void event) {
+                synchronized (lock) {
+                    if (waitingForDrain) {
+                        lock.notifyAll();
+                    }
+                }
+            }
+        };
         response.drainHandler(handler);
         response.closeHandler(handler);
 
         context.getRoutingContext().addEndHandler(new Handler<>() {
             @Override
             public void handle(AsyncResult<Void> event) {
-                synchronized (request.connection()) {
+                synchronized (lock) {
                     if (waitingForDrain) {
-                        request.connection().notifyAll();
+                        lock.notifyAll();
                     }
                 }
             }
@@ -77,19 +89,23 @@ public class VertxOutputStream extends OutputStream {
 
     private void write(ByteBuf data, boolean last) throws IOException {
         if (last && data == null) {
-            response.end((Handler<AsyncResult<Void>>) null);
+            response.end();
             return;
         }
-        //do all this in the same lock
-        synchronized (request.connection()) {
+        // do all this in the same lock
+        synchronized (lock) {
             try {
                 awaitWriteable();
                 if (last) {
                     if (!response.ended()) { // can happen when an exception occurs during JSON serialization with Jackson
-                        response.end(createBuffer(data), null);
+                        response.end(createBuffer(data));
+                    } else {
+                        if (data.refCnt() > 0) {
+                            data.release();
+                        }
                     }
                 } else {
-                    response.write(createBuffer(data), null);
+                    response.write(createBuffer(data));
                 }
             } catch (Exception e) {
                 if (data != null && data.refCnt() > 0) {
@@ -106,7 +122,7 @@ public class VertxOutputStream extends OutputStream {
             // NEVER block the event loop!
             return;
         }
-        assert Thread.holdsLock(request.connection());
+        assert Thread.holdsLock(lock);
         while (response.writeQueueFull()) {
             if (throwable != null) {
                 throw new IOException(throwable);
@@ -117,7 +133,7 @@ public class VertxOutputStream extends OutputStream {
             try {
                 waitingForDrain = true;
                 // To make sure we don't get stuck waiting, we time out periodically
-                request.connection().wait(1000); // Verify every second
+                lock.wait(1000); // Verify every second
                 // Check for timeout / closed connection
                 if (request.response().ended() || request.response().closed()) {
                     if (throwable != null) {
@@ -139,7 +155,7 @@ public class VertxOutputStream extends OutputStream {
      * {@inheritDoc}
      */
     public void write(final int b) throws IOException {
-        write(new byte[] { (byte) b }, 0, 1);
+        write(new byte[]{(byte) b}, 0, 1);
     }
 
     /**
@@ -177,11 +193,18 @@ public class VertxOutputStream extends OutputStream {
     }
 
     private void writeBlocking(ByteBuf buffer, boolean finished) throws IOException {
-        prepareWrite(buffer, finished);
-        write(buffer, finished);
+        try {
+            prepareWrite(buffer, finished);
+            write(buffer, finished);
+        } catch (Throwable err) {
+            if (buffer != null && buffer.refCnt() > 0) {
+                buffer.release();
+            }
+            throw err;
+        }
     }
 
-    private void prepareWrite(ByteBuf buffer, boolean finished) throws IOException {
+    private void prepareWrite(ByteBuf buffer, boolean finished) {
         if (!committed) {
             committed = true;
             if (finished) {
@@ -225,8 +248,9 @@ public class VertxOutputStream extends OutputStream {
      * {@inheritDoc}
      */
     public void close() throws IOException {
-        if (closed)
+        if (closed) {
             return;
+        }
         try {
             writeBlocking(appendBuffer.clear(), true);
         } catch (Exception e) {
@@ -236,15 +260,4 @@ public class VertxOutputStream extends OutputStream {
         }
     }
 
-    private record DrainHandler(VertxOutputStream out) implements Handler<Void> {
-
-        @Override
-        public void handle(Void event) {
-            synchronized (out.request.connection()) {
-                if (out.waitingForDrain) {
-                    out.request.connection().notifyAll();
-                }
-            }
-        }
-    }
 }
