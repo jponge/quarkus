@@ -35,6 +35,7 @@ public class VertxOutputStream extends OutputStream {
     private Throwable throwable;
 
     private final Object lock = new Object();
+    private boolean preventWritingFromEventLoop = true;
 
     public VertxOutputStream(VertxJavaIoContext context) {
         this.context = context;
@@ -83,6 +84,20 @@ public class VertxOutputStream extends OutputStream {
         });
     }
 
+    /**
+     * Disable the detection of incorrect writes from a Vert.x loop thread.
+     * <p>
+     * {@link VertxOutputStream} was made to enable writing HTTP responses from worker threads.
+     * Write operations block when the underlying Vert.x write stream queue is full to avoid excessive buffering.
+     * We cannot block event-loop threads and excessive buffering is dangerous, hence any write attempt on the event-loop is a bad use of {@link VertxOutputStream}.
+     *
+     * @deprecated Modify your usage of {@link VertxOutputStream} to never make writes on a Vert.x event-loop thread
+     */
+    @Deprecated(forRemoval = true)
+    public void disableIncorrectEventLoopWriteDetection() {
+        this.preventWritingFromEventLoop = false;
+    }
+
     private Buffer createBuffer(ByteBuf data) {
         return new NoBoundChecksBuffer(data);
     }
@@ -120,7 +135,11 @@ public class VertxOutputStream extends OutputStream {
         // is it running in an event loop?
         if (Context.isOnEventLoopThread()) {
             // NEVER block the event loop!
-            return;
+            if (preventWritingFromEventLoop) {
+                throw new BlockingOperationNotAllowedException("Write operations on VertxOutputStream are not allowed from Vert.x event-loop threads");
+            } else {
+                return;
+            }
         }
         assert Thread.holdsLock(lock);
         while (response.writeQueueFull()) {
