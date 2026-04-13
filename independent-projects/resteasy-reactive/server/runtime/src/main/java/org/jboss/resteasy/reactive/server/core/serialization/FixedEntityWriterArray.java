@@ -8,6 +8,7 @@ import jakarta.ws.rs.ext.MessageBodyWriter;
 
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
+import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
 
 /**
  * A fixed entity writer that iterates an array of providers until it finds one that can handle
@@ -16,23 +17,37 @@ import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 @SuppressWarnings("ForLoopReplaceableByForEach")
 public class FixedEntityWriterArray implements EntityWriter {
 
-    private final MessageBodyWriter[] writers;
+    private final MessageBodyWriter<?>[] writers;
     private final ServerSerialisers serialisers;
+    private final boolean requiresOutputStream;
 
-    public FixedEntityWriterArray(MessageBodyWriter[] writers, ServerSerialisers serialisers) {
+    public FixedEntityWriterArray(MessageBodyWriter<?>[] writers, ServerSerialisers serialisers) {
         this.writers = writers;
         this.serialisers = serialisers;
+        boolean blockingDetected = false;
+        for (int i = 0; i < writers.length; i++) {
+            if (!(writers[i] instanceof ServerMessageBodyWriter<?> writer) || !writer.performsNonBlockingIO()) {
+                blockingDetected = true;
+                break;
+            }
+        }
+        this.requiresOutputStream = blockingDetected;
     }
 
     @Override
     public void write(ResteasyReactiveRequestContext context, Object entity) throws IOException {
         for (int i = 0; i < writers.length; ++i) {
-            MessageBodyWriter writer = writers[i];
+            MessageBodyWriter<?> writer = writers[i];
             if (ServerSerialisers.invokeWriter(context, entity, writer, serialisers)) {
                 return;
             }
         }
         throw new InternalServerErrorException("Could not find MessageBodyWriter for " + entity.getClass(),
                 Response.serverError().build());
+    }
+
+    @Override
+    public boolean requiresOutputStream() {
+        return this.requiresOutputStream;
     }
 }

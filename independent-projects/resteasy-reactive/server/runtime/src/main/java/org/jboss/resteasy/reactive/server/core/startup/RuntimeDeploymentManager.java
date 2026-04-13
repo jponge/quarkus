@@ -211,7 +211,7 @@ public class RuntimeDeploymentManager {
         if (!interceptors.getContainerResponseFilters().getGlobalResourceInterceptors().isEmpty()) {
             abortHandlingChain.addAll(interceptorDeployment.getGlobalResponseInterceptorHandlers());
         }
-        abortHandlingChain.add(new ResponseWriterHandler(dynamicEntityWriter));
+        abortHandlingChain.add(new ResponseWriterHandler(dynamicEntityWriter, virtualExecutorSupplier));
 
         //pre matching interceptors are run first
         List<ServerRestHandler> preMatchHandlers = new ArrayList<>();

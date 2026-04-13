@@ -45,4 +45,9 @@ public class ServerJsonStructureHandler extends JsonStructureHandler
             ServerRequestContext context) throws WebApplicationException, IOException {
         return JsonpUtil.reader(context.getInputStream(), mediaType).read();
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

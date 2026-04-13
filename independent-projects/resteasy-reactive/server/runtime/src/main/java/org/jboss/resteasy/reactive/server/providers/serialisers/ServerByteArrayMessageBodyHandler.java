@@ -37,4 +37,9 @@ public class ServerByteArrayMessageBodyHandler extends ByteArrayMessageBodyHandl
             throws WebApplicationException, IOException {
         return MessageReaderUtil.readBytes(context.getInputStream());
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

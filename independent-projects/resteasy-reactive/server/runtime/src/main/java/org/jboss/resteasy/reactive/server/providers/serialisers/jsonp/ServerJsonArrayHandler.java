@@ -44,4 +44,9 @@ public class ServerJsonArrayHandler extends JsonArrayHandler
             ServerRequestContext context) throws WebApplicationException, IOException {
         return JsonpUtil.reader(context.getInputStream(), mediaType).readArray();
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

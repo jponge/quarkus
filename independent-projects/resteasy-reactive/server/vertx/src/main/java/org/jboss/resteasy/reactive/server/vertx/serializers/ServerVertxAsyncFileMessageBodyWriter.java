@@ -81,4 +81,8 @@ public class ServerVertxAsyncFileMessageBodyWriter implements ServerMessageBodyW
         throw new UnsupportedOperationException("not supported");
     }
 
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

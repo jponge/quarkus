@@ -78,14 +78,16 @@ public class BasicServerJacksonMessageBodyWriter extends ServerMessageBodyWriter
     @Override
     public void writeResponse(Object o, Type genericType, ServerRequestContext context)
             throws WebApplicationException, IOException {
-        OutputStream stream = context.getOrCreateOutputStream();
-        if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
-            stream.write(((String) o).getBytes(StandardCharsets.UTF_8));
+        if (o instanceof String str) { // YUK: done in order to avoid adding extra quotes...
+            context.serverResponse().end(str.getBytes(StandardCharsets.UTF_8));
         } else {
-            getWriter(genericType, o).writeValue(stream, o);
+            context.serverResponse().end(getWriter(genericType, o).writeValueAsBytes(o));
         }
-        // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
-        stream.close();
+    }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
     }
 
     @Override

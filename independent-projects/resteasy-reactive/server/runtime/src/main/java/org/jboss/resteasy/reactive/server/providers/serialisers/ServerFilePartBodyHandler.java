@@ -36,4 +36,9 @@ public class ServerFilePartBodyHandler extends FilePartBodyHandler implements Se
         ServerHttpResponse vertxResponse = context.serverResponse();
         vertxResponse.sendFile(o.file.getPath(), o.offset, o.count);
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

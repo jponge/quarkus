@@ -16,4 +16,7 @@ public interface EntityWriter {
 
     void write(ResteasyReactiveRequestContext context, Object entity) throws IOException;
 
+    default boolean requiresOutputStream() {
+        return true;
+    }
 }

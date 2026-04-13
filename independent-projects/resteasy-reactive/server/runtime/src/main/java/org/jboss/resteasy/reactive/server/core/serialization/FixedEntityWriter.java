@@ -8,6 +8,7 @@ import jakarta.ws.rs.ext.MessageBodyWriter;
 
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
+import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
 
 /**
  * A fixed entity writer that can be used when we know the result will always be written
@@ -15,10 +16,10 @@ import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
  */
 public class FixedEntityWriter implements EntityWriter {
 
-    private final MessageBodyWriter writer;
+    private final MessageBodyWriter<?> writer;
     private final ServerSerialisers serialisers;
 
-    public FixedEntityWriter(MessageBodyWriter writer, ServerSerialisers serialisers) {
+    public FixedEntityWriter(MessageBodyWriter<?> writer, ServerSerialisers serialisers) {
         this.writer = writer;
         this.serialisers = serialisers;
     }
@@ -31,4 +32,8 @@ public class FixedEntityWriter implements EntityWriter {
         }
     }
 
+    @Override
+    public boolean requiresOutputStream() {
+        return !(writer instanceof ServerMessageBodyWriter<?> smw) || !smw.performsNonBlockingIO();
+    }
 }

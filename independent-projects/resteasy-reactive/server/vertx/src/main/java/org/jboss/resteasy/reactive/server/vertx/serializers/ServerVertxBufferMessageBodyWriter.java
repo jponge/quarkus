@@ -43,4 +43,9 @@ public class ServerVertxBufferMessageBodyWriter implements ServerMessageBodyWrit
             context.serverResponse().end(buffer.getBytes());
         }
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

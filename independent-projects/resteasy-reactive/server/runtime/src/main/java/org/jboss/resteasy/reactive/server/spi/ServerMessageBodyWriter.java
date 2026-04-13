@@ -19,6 +19,10 @@ public interface ServerMessageBodyWriter<T> extends MessageBodyWriter<T> {
 
     void writeResponse(T o, Type genericType, ServerRequestContext context) throws WebApplicationException, IOException;
 
+    default boolean performsNonBlockingIO() {
+        return false;
+    }
+
     /**
      * A special super-class of MessageBodyWriters that accepts all types of input.
      * The main purpose of this class is to allow runtime code

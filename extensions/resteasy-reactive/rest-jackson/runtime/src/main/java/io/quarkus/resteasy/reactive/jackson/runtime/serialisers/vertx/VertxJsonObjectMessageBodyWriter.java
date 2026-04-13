@@ -37,4 +37,8 @@ public class VertxJsonObjectMessageBodyWriter extends VertxJsonObjectBasicMessag
         entityStream.write(o.encode().getBytes(StandardCharsets.UTF_8));
     }
 
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

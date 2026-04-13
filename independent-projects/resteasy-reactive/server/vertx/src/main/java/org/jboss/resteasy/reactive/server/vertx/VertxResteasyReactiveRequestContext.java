@@ -518,6 +518,12 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
     @Override
     public OutputStream createResponseOutputStream() {
         final ResteasyReactiveConfig config = getDeployment().getResteasyReactiveConfig();
+        if (Context.isOnEventLoopThread()) {
+            log.warn("""
+                    VertxOutputStream created on the event loop thread: this might fail on write.\
+                    The response writer should have dispatched to a worker thread. \
+                    This is a bug in the dispatch logic.""");
+        }
         return new VertxOutputStream(
                 new ResteasyVertxJavaIoContext(
                         context,

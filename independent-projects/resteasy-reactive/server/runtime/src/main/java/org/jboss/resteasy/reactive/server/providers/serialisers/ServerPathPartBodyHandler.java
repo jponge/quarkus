@@ -41,4 +41,9 @@ public class ServerPathPartBodyHandler extends PathPartBodyHandler implements Se
         // sendFile implies end(), even though javadoc doesn't say, if you add end() it will throw
         serverResponse.sendFile(o.file.toString(), o.offset, o.count);
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

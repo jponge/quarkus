@@ -80,4 +80,9 @@ public class ServerMutinyAsyncFileMessageBodyWriter implements ServerMessageBody
             MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException {
         throw new UnsupportedOperationException("Returning an AsyncFile is not supported with WriterInterceptors");
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

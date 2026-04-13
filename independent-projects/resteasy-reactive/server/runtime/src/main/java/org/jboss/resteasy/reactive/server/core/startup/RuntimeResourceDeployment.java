@@ -138,7 +138,7 @@ public class RuntimeResourceDeployment {
         this.defaultBlocking = defaultBlocking;
         this.blockingHandler = new BlockingHandler(executorSupplier);
         this.blockingHandlerVirtualThread = new BlockingHandler(virtualExecutorSupplier);
-        this.responseWriterHandler = new ResponseWriterHandler(dynamicEntityWriter);
+        this.responseWriterHandler = new ResponseWriterHandler(dynamicEntityWriter, virtualExecutorSupplier);
     }
 
     public RuntimeResource buildResourceMethod(ResourceClass clazz,

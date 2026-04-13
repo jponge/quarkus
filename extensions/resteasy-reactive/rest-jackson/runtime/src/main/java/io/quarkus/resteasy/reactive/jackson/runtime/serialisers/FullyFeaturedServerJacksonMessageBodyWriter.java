@@ -68,9 +68,8 @@ public class FullyFeaturedServerJacksonMessageBodyWriter extends ServerMessageBo
     @Override
     public void writeResponse(Object o, Type genericType, ServerRequestContext context)
             throws WebApplicationException, IOException {
-        OutputStream stream = context.getOrCreateOutputStream();
-        if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
-            stream.write(((String) o).getBytes(StandardCharsets.UTF_8));
+        if (o instanceof String str) { // YUK: done in order to avoid adding extra quotes...
+            context.serverResponse().end(str.getBytes(StandardCharsets.UTF_8));
         } else {
             ObjectMapper effectiveMapper = getEffectiveMapper(o, context);
             ObjectWriter effectiveWriter = getEffectiveWriter(effectiveMapper);
@@ -103,10 +102,13 @@ public class FullyFeaturedServerJacksonMessageBodyWriter extends ServerMessageBo
                     effectiveWriter = effectiveWriter.forType(rootType);
                 }
             }
-            effectiveWriter.writeValue(stream, o);
+            context.serverResponse().end(effectiveWriter.writeValueAsBytes(o));
         }
-        // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
-        stream.close();
+    }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
     }
 
     private ObjectWriter getObjectWriterFromAnnotations(ResteasyReactiveResourceInfo resourceInfo, Type type,

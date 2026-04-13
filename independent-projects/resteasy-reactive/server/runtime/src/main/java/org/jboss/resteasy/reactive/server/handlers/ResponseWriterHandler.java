@@ -1,5 +1,8 @@
 package org.jboss.resteasy.reactive.server.handlers;
 
+import java.util.concurrent.Executor;
+import java.util.function.Supplier;
+
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 
@@ -17,9 +20,11 @@ public class ResponseWriterHandler implements ServerRestHandler {
 
     public static final String HEAD = "HEAD";
     private final DynamicEntityWriter dynamicEntityWriter;
+    private final Supplier<Executor> executorSupplier;
 
-    public ResponseWriterHandler(DynamicEntityWriter dynamicEntityWriter) {
+    public ResponseWriterHandler(DynamicEntityWriter dynamicEntityWriter, Supplier<Executor> executorSupplier) {
         this.dynamicEntityWriter = dynamicEntityWriter;
+        this.executorSupplier = executorSupplier;
     }
 
     @Override
@@ -28,6 +33,17 @@ public class ResponseWriterHandler implements ServerRestHandler {
         Object entity = requestContext.getResponseEntity();
         if (entity != null && !requestContext.getMethod().equals(HEAD)) {
             EntityWriter entityWriter = requestContext.getEntityWriter();
+            if (requestContext.serverRequest().isOnIoThread()) {
+                EntityWriter effectiveWriter = (entityWriter != null) ? entityWriter : dynamicEntityWriter;
+                if (effectiveWriter.requiresOutputStream()
+                        || requestContext.getWriterInterceptors() != null
+                        || requestContext.getOutputStream() != null) {
+                    requestContext.setPosition(requestContext.getPosition() - 1);
+                    requestContext.suspend();
+                    requestContext.resume(executorSupplier.get());
+                    return;
+                }
+            }
             if (entityWriter == null) {
                 dynamicEntityWriter.write(requestContext, entity);
             } else {

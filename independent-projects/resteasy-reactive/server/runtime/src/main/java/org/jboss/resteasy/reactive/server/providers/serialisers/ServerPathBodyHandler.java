@@ -28,6 +28,11 @@ public class ServerPathBodyHandler extends PathBodyHandler implements ServerMess
     }
 
     @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
+
+    @Override
     public boolean isWriteable(Class<?> type, Type genericType, ResteasyReactiveResourceInfo target, MediaType mediaType) {
         return java.nio.file.Path.class.isAssignableFrom(type);
     }

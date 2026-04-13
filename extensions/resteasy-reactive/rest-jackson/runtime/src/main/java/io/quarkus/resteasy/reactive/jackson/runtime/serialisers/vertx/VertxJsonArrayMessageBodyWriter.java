@@ -26,4 +26,9 @@ public class VertxJsonArrayMessageBodyWriter extends VertxJsonArrayBasicMessageB
             throws WebApplicationException, IOException {
         context.serverResponse().end(o.encode());
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

@@ -56,4 +56,8 @@ public class ServerFormUrlEncodedProvider extends MapAsFormUrlEncodedProvider
         }
     }
 
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

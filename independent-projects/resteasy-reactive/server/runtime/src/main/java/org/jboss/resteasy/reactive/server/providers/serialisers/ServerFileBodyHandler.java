@@ -34,6 +34,11 @@ public class ServerFileBodyHandler extends FileBodyHandler implements ServerMess
     }
 
     @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
+
+    @Override
     public void writeResponse(File o, Type genericType, ServerRequestContext context) throws WebApplicationException {
         sendFile(o, context);
     }

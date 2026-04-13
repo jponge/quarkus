@@ -1,6 +1,7 @@
 package io.quarkus.resteasy.reactive.jaxb.runtime.serialisers;
 
 import java.beans.Introspector;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
@@ -47,10 +48,9 @@ public class ServerJaxbMessageBodyWriter extends ServerMessageBodyWriter.AllWrit
     public void writeResponse(Object o, Type genericType, ServerRequestContext context)
             throws WebApplicationException, IOException {
         setContentTypeIfNecessary(context);
-        OutputStream stream = context.getOrCreateOutputStream();
-        marshal(o, stream);
-        // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
-        stream.close();
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        marshal(o, byteArrayOutputStream);
+        context.serverResponse().end(byteArrayOutputStream.toByteArray());
     }
 
     protected void marshal(Object o, OutputStream outputStream) {

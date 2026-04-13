@@ -37,4 +37,9 @@ public class ServerCharArrayMessageBodyHandler extends CharArrayMessageBodyHandl
             throws WebApplicationException, IOException {
         return MessageReaderUtil.readString(context.getInputStream(), mediaType).toCharArray();
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

@@ -36,4 +36,9 @@ public class ServerStringMessageBodyHandler extends StringMessageBodyHandler
             throws WebApplicationException, IOException {
         return readFrom(context.getInputStream(), true);
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

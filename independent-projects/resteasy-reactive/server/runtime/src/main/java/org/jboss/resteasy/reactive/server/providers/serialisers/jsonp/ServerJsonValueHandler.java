@@ -44,4 +44,9 @@ public class ServerJsonValueHandler extends JsonValueHandler
             ServerRequestContext context) throws WebApplicationException, IOException {
         return JsonpUtil.reader(context.getInputStream(), mediaType).readValue();
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

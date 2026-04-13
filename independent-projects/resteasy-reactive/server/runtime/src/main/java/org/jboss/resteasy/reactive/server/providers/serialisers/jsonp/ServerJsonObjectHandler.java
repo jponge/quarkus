@@ -43,4 +43,9 @@ public class ServerJsonObjectHandler extends JsonObjectHandler
             ServerRequestContext context) throws WebApplicationException {
         return JsonpUtil.reader(context.getInputStream(), mediaType).readObject();
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }

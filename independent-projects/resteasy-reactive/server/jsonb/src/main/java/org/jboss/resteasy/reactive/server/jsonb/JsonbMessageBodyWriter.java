@@ -13,7 +13,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 
 import org.jboss.resteasy.reactive.common.providers.serialisers.JsonMessageBodyWriterUtil;
-import org.jboss.resteasy.reactive.server.NoopCloseAndFlushOutputStream;
 import org.jboss.resteasy.reactive.server.StreamingOutputStream;
 import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
@@ -42,14 +41,15 @@ public class JsonbMessageBodyWriter extends ServerMessageBodyWriter.AllWriteable
     @Override
     public void writeResponse(Object o, Type genericType, ServerRequestContext context)
             throws WebApplicationException, IOException {
-        OutputStream originalStream = context.getOrCreateOutputStream();
-        OutputStream stream = new NoopCloseAndFlushOutputStream(originalStream);
-        if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
-            stream.write(((String) o).getBytes(StandardCharsets.UTF_8));
+        if (o instanceof String str) { // YUK: done in order to avoid adding extra quotes...
+            context.serverResponse().end(str.getBytes(StandardCharsets.UTF_8));
         } else {
-            json.toJson(o, stream);
+            context.serverResponse().end(json.toJson(o));
         }
-        // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
-        originalStream.close();
+    }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
     }
 }

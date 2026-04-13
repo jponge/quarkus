@@ -37,4 +37,9 @@ public class ServerMutinyBufferMessageBodyWriter implements ServerMessageBodyWri
     public void writeResponse(Buffer buffer, Type genericType, ServerRequestContext context) throws WebApplicationException {
         context.serverResponse().end(buffer.getBytes());
     }
+
+    @Override
+    public boolean performsNonBlockingIO() {
+        return true;
+    }
 }
