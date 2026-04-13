@@ -68,6 +68,9 @@ public class VertxInputStream extends InputStream {
         if (closed) {
             throw new IOException("Stream is closed");
         }
+        if (len == 0) {
+            return 0;
+        }
         if (inputContext.getContinueState() == VertxInputContext.ContinueState.REQUIRED) {
             inputContext.setContinueState(VertxInputContext.ContinueState.SENT);
             exchange.request.response().writeContinue();
@@ -93,9 +96,6 @@ public class VertxInputStream extends InputStream {
         }
         if (finished) {
             return -1;
-        }
-        if (len == 0) {
-            return 0;
         }
         ByteBuf buffer = pooled;
         int copied = Math.min(len, buffer.readableBytes());
@@ -143,8 +143,6 @@ public class VertxInputStream extends InputStream {
                     pooled = null;
                 }
             }
-        } catch (IOException | RuntimeException e) {
-            throw e;
         } finally {
             if (pooled != null) {
                 pooled.release();
@@ -154,20 +152,21 @@ public class VertxInputStream extends InputStream {
         }
     }
 
-    public static class VertxBlockingInput implements Handler<Buffer> {
-        protected final HttpServerRequest request;
-        protected Buffer input1;
-        protected Deque<Buffer> inputOverflow;
-        protected boolean waiting = false;
-        protected boolean eof = false;
-        protected Throwable readException;
+    private static final class VertxBlockingInput implements Handler<Buffer> {
+        private final HttpServerRequest request;
+        private Buffer input1;
+        private Deque<Buffer> inputOverflow;
+        private boolean waiting = false;
+        private boolean eof = false;
+        private Throwable readException;
         private final long timeout;
+        private final Object lock = new Object();
 
-        public VertxBlockingInput(HttpServerRequest request, long timeout) {
+        VertxBlockingInput(HttpServerRequest request, long timeout) {
             this.request = request;
             this.timeout = timeout;
             final ConnectionBase connection = (ConnectionBase) request.connection();
-            synchronized (connection) {
+            synchronized (lock) {
                 if (!connection.channel().isOpen()) {
                     readException = new ClosedChannelException();
                 } else if (!request.isEnded()) {
@@ -176,10 +175,10 @@ public class VertxInputStream extends InputStream {
                     request.endHandler(new Handler<Void>() {
                         @Override
                         public void handle(Void event) {
-                            synchronized (connection) {
+                            synchronized (lock) {
                                 eof = true;
                                 if (waiting) {
-                                    connection.notifyAll();
+                                    lock.notifyAll();
                                 }
                             }
                         }
@@ -187,7 +186,7 @@ public class VertxInputStream extends InputStream {
                     request.exceptionHandler(new Handler<Throwable>() {
                         @Override
                         public void handle(Throwable event) {
-                            synchronized (connection) {
+                            synchronized (lock) {
                                 readException = new IOException(event);
                                 if (input1 != null) {
                                     input1.getByteBuf().release();
@@ -201,7 +200,7 @@ public class VertxInputStream extends InputStream {
                                     }
                                 }
                                 if (waiting) {
-                                    connection.notifyAll();
+                                    lock.notifyAll();
                                 }
                             }
                         }
@@ -214,9 +213,9 @@ public class VertxInputStream extends InputStream {
             }
         }
 
-        protected ByteBuf readBlocking() throws IOException {
+        private ByteBuf readBlocking() throws IOException {
             long expire = System.currentTimeMillis() + timeout;
-            synchronized (request.connection()) {
+            synchronized (lock) {
                 while (input1 == null && !eof && readException == null) {
                     long rem = expire - System.currentTimeMillis();
                     if (rem <= 0) {
@@ -232,7 +231,7 @@ public class VertxInputStream extends InputStream {
                                     "Attempting a blocking read on io thread");
                         }
                         waiting = true;
-                        request.connection().wait(rem);
+                        lock.wait(rem);
                     } catch (InterruptedException e) {
                         throw new InterruptedIOException(e.getMessage());
                     } finally {
@@ -258,11 +257,11 @@ public class VertxInputStream extends InputStream {
 
         @Override
         public void handle(Buffer event) {
-            synchronized (request.connection()) {
+            synchronized (lock) {
                 if (event.length() == 0 && request.version() == HttpVersion.HTTP_2) {
                     eof = true;
                     if (waiting) {
-                        request.connection().notifyAll();
+                        lock.notifyAll();
                     }
                     return;
                 }
@@ -275,14 +274,16 @@ public class VertxInputStream extends InputStream {
                     inputOverflow.add(event);
                 }
                 if (waiting) {
-                    request.connection().notifyAll();
+                    lock.notifyAll();
                 }
             }
         }
 
         public int readBytesAvailable() {
-            if (input1 != null) {
-                return input1.getByteBuf().readableBytes();
+            synchronized (lock) {
+                if (input1 != null) {
+                    return input1.getByteBuf().readableBytes();
+                }
             }
 
             String length = request.getHeader(HttpHeaders.CONTENT_LENGTH);
@@ -294,7 +295,11 @@ public class VertxInputStream extends InputStream {
             try {
                 return Integer.parseInt(length);
             } catch (NumberFormatException e) {
-                Long.parseLong(length);
+                try {
+                    Long.parseLong(length);
+                } catch (NumberFormatException ne) {
+                    return 0;
+                }
                 return Integer.MAX_VALUE;
             }
         }
