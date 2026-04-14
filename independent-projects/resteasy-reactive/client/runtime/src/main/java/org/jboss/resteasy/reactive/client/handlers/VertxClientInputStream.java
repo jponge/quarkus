@@ -47,12 +47,12 @@ public class VertxClientInputStream extends InputStream {
         if (closed) {
             throw new IOException("Stream is closed");
         }
+        if (len == 0) {
+            return 0;
+        }
         readIntoBuffer();
         if (finished) {
             return -1;
-        }
-        if (len == 0) {
-            return 0;
         }
         ByteBuf buffer = pooled;
         int copied = Math.min(len, buffer.readableBytes());
@@ -235,7 +235,11 @@ public class VertxClientInputStream extends InputStream {
             try {
                 return Integer.parseInt(length);
             } catch (NumberFormatException e) {
-                Long.parseLong(length); // ignore the value as can only return an int anyway
+                try {
+                    Long.parseLong(length); // ignore the value as can only return an int anyway
+                } catch (NumberFormatException ne) {
+                    return 0;
+                }
                 return Integer.MAX_VALUE;
             }
         }
