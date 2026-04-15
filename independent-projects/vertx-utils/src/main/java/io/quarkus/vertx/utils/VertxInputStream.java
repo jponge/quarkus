@@ -2,21 +2,15 @@ package io.quarkus.vertx.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InterruptedIOException;
 import java.nio.channels.ClosedChannelException;
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.vertx.core.Context;
 import io.vertx.core.Handler;
-import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.core.http.HttpVersion;
 import io.vertx.core.net.impl.ConnectionBase;
 
 /**
@@ -28,23 +22,37 @@ import io.vertx.core.net.impl.ConnectionBase;
 public class VertxInputStream extends InputStream {
 
     private final VertxInputContext inputContext;
+    private final HttpServerRequest request;
     private final VertxBlockingInput exchange;
+    private final long limit;
 
     private boolean closed;
     private boolean finished;
     private ByteBuf pooled;
-    private final long limit;
 
     public VertxInputStream(VertxInputContext context) {
         this.inputContext = context;
-        this.exchange = new VertxBlockingInput(context.getRoutingContext().request(), context.getTimeout());
+        this.request = context.getRoutingContext().request();
         this.limit = context.getMaxRequestSize();
+        final ConnectionBase connection = (ConnectionBase) request.connection();
+        if (!connection.channel().isOpen()) {
+            this.exchange = null;
+            this.finished = true;
+        } else if (request.isEnded()) {
+            this.exchange = null;
+            this.finished = true;
+        } else {
+            this.exchange = new VertxBlockingInput(
+                    request,
+                    context.getTimeout(),
+                    () -> request.connection().close(),
+                    () -> new BlockingOperationNotAllowedException(
+                            "Attempting a blocking read on io thread"));
+        }
     }
 
     public VertxInputStream(VertxInputContext context, ByteBuf existing) {
-        this.inputContext = context;
-        this.exchange = new VertxBlockingInput(context.getRoutingContext().request(), context.getTimeout());
-        this.limit = context.getMaxRequestSize();
+        this(context);
         this.pooled = existing;
     }
 
@@ -73,13 +81,13 @@ public class VertxInputStream extends InputStream {
         }
         if (inputContext.getContinueState() == VertxInputContext.ContinueState.REQUIRED) {
             inputContext.setContinueState(VertxInputContext.ContinueState.SENT);
-            exchange.request.response().writeContinue();
+            request.response().writeContinue();
         }
         readIntoBuffer();
-        if (limit > 0 && exchange.request.bytesRead() > limit) {
-            HttpServerResponse response = exchange.request.response();
+        if (limit > 0 && request.bytesRead() > limit) {
+            HttpServerResponse response = request.response();
             if (response.headWritten()) {
-                exchange.request.connection().close();
+                request.connection().close();
                 throw new IOException("Request too large");
             } else {
                 response.setStatusCode(HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE.code());
@@ -87,7 +95,7 @@ public class VertxInputStream extends InputStream {
                 response.endHandler(new Handler<Void>() {
                     @Override
                     public void handle(Void event) {
-                        exchange.request.connection().close();
+                        request.connection().close();
                     }
                 });
                 response.end();
@@ -126,7 +134,25 @@ public class VertxInputStream extends InputStream {
             return 0;
         }
 
-        return exchange.readBytesAvailable();
+        int buffered = exchange.readBytesAvailable();
+        if (buffered > 0) {
+            return buffered;
+        }
+
+        String length = request.getHeader(HttpHeaders.CONTENT_LENGTH);
+        if (length == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(length);
+        } catch (NumberFormatException e) {
+            try {
+                Long.parseLong(length);
+            } catch (NumberFormatException ne) {
+                return 0;
+            }
+            return Integer.MAX_VALUE;
+        }
     }
 
     @Override
@@ -149,159 +175,6 @@ public class VertxInputStream extends InputStream {
                 pooled = null;
             }
             finished = true;
-        }
-    }
-
-    private static final class VertxBlockingInput implements Handler<Buffer> {
-        private final HttpServerRequest request;
-        private Buffer input1;
-        private Deque<Buffer> inputOverflow;
-        private boolean waiting = false;
-        private boolean eof = false;
-        private Throwable readException;
-        private final long timeout;
-        private final Object lock = new Object();
-
-        VertxBlockingInput(HttpServerRequest request, long timeout) {
-            this.request = request;
-            this.timeout = timeout;
-            final ConnectionBase connection = (ConnectionBase) request.connection();
-            synchronized (lock) {
-                if (!connection.channel().isOpen()) {
-                    readException = new ClosedChannelException();
-                } else if (!request.isEnded()) {
-                    request.pause();
-                    request.handler(this);
-                    request.endHandler(new Handler<Void>() {
-                        @Override
-                        public void handle(Void event) {
-                            synchronized (lock) {
-                                eof = true;
-                                if (waiting) {
-                                    lock.notifyAll();
-                                }
-                            }
-                        }
-                    });
-                    request.exceptionHandler(new Handler<Throwable>() {
-                        @Override
-                        public void handle(Throwable event) {
-                            synchronized (lock) {
-                                readException = new IOException(event);
-                                if (input1 != null) {
-                                    input1.getByteBuf().release();
-                                    input1 = null;
-                                }
-                                if (inputOverflow != null) {
-                                    Buffer d = inputOverflow.poll();
-                                    while (d != null) {
-                                        d.getByteBuf().release();
-                                        d = inputOverflow.poll();
-                                    }
-                                }
-                                if (waiting) {
-                                    lock.notifyAll();
-                                }
-                            }
-                        }
-
-                    });
-                    request.fetch(1);
-                } else {
-                    eof = true;
-                }
-            }
-        }
-
-        private ByteBuf readBlocking() throws IOException {
-            long expire = System.currentTimeMillis() + timeout;
-            synchronized (lock) {
-                while (input1 == null && !eof && readException == null) {
-                    long rem = expire - System.currentTimeMillis();
-                    if (rem <= 0) {
-                        request.connection().close();
-                        IOException throwable = new IOException("Read timed out");
-                        readException = throwable;
-                        throw throwable;
-                    }
-
-                    try {
-                        if (Context.isOnEventLoopThread()) {
-                            throw new BlockingOperationNotAllowedException(
-                                    "Attempting a blocking read on io thread");
-                        }
-                        waiting = true;
-                        lock.wait(rem);
-                    } catch (InterruptedException e) {
-                        throw new InterruptedIOException(e.getMessage());
-                    } finally {
-                        waiting = false;
-                    }
-                }
-                if (readException != null) {
-                    throw new IOException(readException);
-                }
-                Buffer ret = input1;
-                input1 = null;
-                if (inputOverflow != null) {
-                    input1 = inputOverflow.poll();
-                    if (input1 == null) {
-                        request.fetch(1);
-                    }
-                } else if (!eof) {
-                    request.fetch(1);
-                }
-                return ret == null ? null : ret.getByteBuf();
-            }
-        }
-
-        @Override
-        public void handle(Buffer event) {
-            synchronized (lock) {
-                if (event.length() == 0 && request.version() == HttpVersion.HTTP_2) {
-                    eof = true;
-                    if (waiting) {
-                        lock.notifyAll();
-                    }
-                    return;
-                }
-                if (input1 == null) {
-                    input1 = event;
-                } else {
-                    if (inputOverflow == null) {
-                        inputOverflow = new ArrayDeque<>();
-                    }
-                    inputOverflow.add(event);
-                }
-                if (waiting) {
-                    lock.notifyAll();
-                }
-            }
-        }
-
-        public int readBytesAvailable() {
-            synchronized (lock) {
-                if (input1 != null) {
-                    return input1.getByteBuf().readableBytes();
-                }
-            }
-
-            String length = request.getHeader(HttpHeaders.CONTENT_LENGTH);
-
-            if (length == null) {
-                return 0;
-            }
-
-            try {
-                return Integer.parseInt(length);
-            } catch (NumberFormatException e) {
-                try {
-                    Long.parseLong(length);
-                } catch (NumberFormatException ne) {
-                    return 0;
-                }
-                return Integer.MAX_VALUE;
-            }
         }
     }
 }
