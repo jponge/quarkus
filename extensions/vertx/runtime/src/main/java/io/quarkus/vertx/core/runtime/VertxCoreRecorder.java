@@ -248,6 +248,10 @@ public class VertxCoreRecorder {
         return vertx;
     }
 
+    public static void addVertxStartCallback(Consumer<Vertx> callback) {
+        vertx.addPostInitCallback(callback);
+    }
+
     public static Vertx initialize(VertxConfiguration conf, VertxCustomizer customizer,
             ThreadPoolConfig threadPoolConfig, ShutdownContext shutdown,
             LaunchMode launchMode, List<String> vertxServiceProviderClassNames,
@@ -890,6 +894,7 @@ public class VertxCoreRecorder {
         final ShutdownContext shutdown;
         final List<String> vertxServiceProviderClassNames;
         final List<String> verticleFactoryClassNames;
+        private List<Consumer<Vertx>> postInitCallbacks;
         Vertx v;
 
         VertxSupplier(LaunchMode launchMode, VertxConfiguration config,
@@ -907,11 +912,28 @@ public class VertxCoreRecorder {
             this.verticleFactoryClassNames = verticleFactoryClassNames;
         }
 
+        void addPostInitCallback(Consumer<Vertx> callback) {
+            if (v != null) {
+                callback.accept(v);
+            } else {
+                if (postInitCallbacks == null) {
+                    postInitCallbacks = new ArrayList<>();
+                }
+                postInitCallbacks.add(callback);
+            }
+        }
+
         @Override
         public synchronized Vertx get() {
             if (v == null) {
                 v = initialize(config, customizer, threadPoolConfig, shutdown, launchMode, vertxServiceProviderClassNames,
                         verticleFactoryClassNames);
+                if (postInitCallbacks != null) {
+                    for (Consumer<Vertx> cb : postInitCallbacks) {
+                        cb.accept(v);
+                    }
+                    postInitCallbacks = null;
+                }
             }
             return v;
         }

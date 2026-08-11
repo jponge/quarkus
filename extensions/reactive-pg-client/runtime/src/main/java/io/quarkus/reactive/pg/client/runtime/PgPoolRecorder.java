@@ -50,13 +50,13 @@ public class PgPoolRecorder {
         this.reactivePostgreRuntimeConfig = reactivePostgreRuntimeConfig;
     }
 
-    public Function<SyntheticCreationalContext<Pool>, Pool> configurePgPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configurePgPool(Supplier<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown,
             Supplier<TlsConfigurationRegistry> tlsRegistrySupplier) {
         return new Function<>() {
             @Override
             public Pool apply(SyntheticCreationalContext<Pool> context) {
-                Pool pool = initialize((VertxInternal) vertx.getValue(),
+                Pool pool = initialize((VertxInternal) vertx.get(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),

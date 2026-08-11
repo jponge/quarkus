@@ -37,7 +37,7 @@ public class VertxProducer {
         return vertx.eventBus();
     }
 
-    @Singleton
+    @ApplicationScoped
     @Produces
     public io.vertx.mutiny.core.Vertx mutiny(Vertx vertx) {
         return io.vertx.mutiny.core.Vertx.newInstance(vertx);

@@ -28,6 +28,7 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.vertx.ConsumeEvent;
 import io.quarkus.vertx.LocalEventBusCodec;
+import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.quarkus.virtual.threads.VirtualThreadsRecorder;
 import io.smallrye.common.expression.Expression;
 import io.smallrye.common.expression.ResolveContext;
@@ -50,15 +51,16 @@ public class VertxEventBusConsumerRecorder {
     static volatile Vertx vertx;
     static volatile List<MessageConsumer<?>> messageConsumers;
 
-    public void configureVertx(Supplier<Vertx> vertx,
+    public void configureVertx(Supplier<Vertx> vertxSupplier,
             List<EventConsumerInfo> messageConsumerConfigurations,
             LaunchMode launchMode, ShutdownContext shutdown, Map<Class<?>, Class<?>> codecByClass,
             List<Class<?>> selectorTypes) {
-        VertxEventBusConsumerRecorder.vertx = vertx.get();
-        VertxEventBusConsumerRecorder.messageConsumers = new CopyOnWriteArrayList<>();
-
-        registerMessageConsumers(messageConsumerConfigurations);
-        registerCodecs(codecByClass, selectorTypes);
+        VertxCoreRecorder.addVertxStartCallback(v -> {
+            VertxEventBusConsumerRecorder.vertx = v;
+            VertxEventBusConsumerRecorder.messageConsumers = new CopyOnWriteArrayList<>();
+            registerMessageConsumers(messageConsumerConfigurations);
+            registerCodecs(codecByClass, selectorTypes);
+        });
 
         if (launchMode == LaunchMode.DEVELOPMENT) {
             shutdown.addShutdownTask(new Runnable() {
@@ -207,6 +209,9 @@ public class VertxEventBusConsumerRecorder {
     }
 
     void unregisterMessageConsumers() {
+        if (messageConsumers == null || messageConsumers.isEmpty()) {
+            return;
+        }
         CountDownLatch latch = new CountDownLatch(messageConsumers.size());
         for (MessageConsumer<?> messageConsumer : messageConsumers) {
             messageConsumer.unregister().onComplete(ar -> {
@@ -267,10 +272,6 @@ public class VertxEventBusConsumerRecorder {
                 return null;
             }
         });
-    }
-
-    public RuntimeValue<Vertx> forceStart(Supplier<Vertx> vertx) {
-        return new RuntimeValue<>(vertx.get());
     }
 
     /**

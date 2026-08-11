@@ -17,7 +17,7 @@ import java.util.logging.LogRecord;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -177,7 +177,7 @@ class VertxCoreProcessor {
                 vertxServiceProviderClassNames, verticleFactoryClassNames, executorBuildItem.getExecutorProxy());
         syntheticBeans.produce(SyntheticBeanBuildItem.configure(Vertx.class)
                 .types(Vertx.class)
-                .scope(Singleton.class)
+                .scope(ApplicationScoped.class)
                 .unremovable()
                 .setRuntimeInit()
                 .supplier(vertx).done());

@@ -49,7 +49,7 @@ public class RedisClientRecorder {
         this.runtimeConfig = runtimeConfig;
     }
 
-    public void initialize(RuntimeValue<io.vertx.core.Vertx> vertx, Set<String> names,
+    public void initialize(Supplier<io.vertx.core.Vertx> vertx, Set<String> names,
             Supplier<TlsConfigurationRegistry> tlsRegistrySupplier,
             Supplier<ProxyConfigurationRegistry> proxyRegistrySupplier) {
         Instance<ObservableRedisMetrics> instance = CDI.current().select(ObservableRedisMetrics.class);
@@ -59,14 +59,14 @@ public class RedisClientRecorder {
             this.metrics = null;
         }
 
-        this.vertx = Vertx.newInstance(vertx.getValue());
+        this.vertx = Vertx.newInstance(vertx.get());
 
         TlsConfigurationRegistry tlsRegistry = tlsRegistrySupplier.get();
         ProxyConfigurationRegistry proxyRegistry = proxyRegistrySupplier.get();
 
         _registerCodecs();
 
-        _initialize(vertx.getValue(), names, tlsRegistry, proxyRegistry);
+        _initialize(vertx.get(), names, tlsRegistry, proxyRegistry);
     }
 
     private static void _registerCodecs() {

@@ -52,13 +52,13 @@ public class DB2PoolRecorder {
         this.reactiveDB2RuntimeConfig = reactiveDB2RuntimeConfig;
     }
 
-    public Function<SyntheticCreationalContext<Pool>, Pool> configureDB2Pool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureDB2Pool(Supplier<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown,
             Supplier<TlsConfigurationRegistry> tlsRegistrySupplier) {
         return new Function<>() {
             @Override
             public Pool apply(SyntheticCreationalContext<Pool> context) {
-                Pool pool = initialize((VertxInternal) vertx.getValue(),
+                Pool pool = initialize((VertxInternal) vertx.get(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),

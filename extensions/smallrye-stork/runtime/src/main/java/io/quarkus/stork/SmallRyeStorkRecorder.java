@@ -1,6 +1,7 @@
 package io.quarkus.stork;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.CDI;
@@ -21,14 +22,14 @@ public class SmallRyeStorkRecorder {
         this.runtimeConfig = runtimeConfig;
     }
 
-    public void initialize(ShutdownContext shutdown, RuntimeValue<Vertx> vertx) {
+    public void initialize(ShutdownContext shutdown, Supplier<Vertx> vertx) {
         List<ServiceConfig> serviceConfigs = StorkConfigUtil.toStorkServiceConfig(runtimeConfig.getValue());
         StorkConfigProvider.init(serviceConfigs);
         Instance<ObservationCollector> instance = CDI.current().select(ObservationCollector.class);
         if (instance.isResolvable()) {
-            Stork.initialize(new QuarkusStorkObservableInfrastructure(vertx.getValue(), instance.get()));
+            Stork.initialize(new QuarkusStorkObservableInfrastructure(vertx.get(), instance.get()));
         } else {
-            QuarkusStorkInfrastructure infrastructure = new QuarkusStorkInfrastructure(vertx.getValue());
+            QuarkusStorkInfrastructure infrastructure = new QuarkusStorkInfrastructure(vertx.get());
             Stork.initialize(infrastructure);
         }
 

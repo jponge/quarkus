@@ -62,12 +62,12 @@ public class CertificateRecorder implements TlsConfigurationRegistry {
      * @param vertx the Vert.x instance
      */
     public void validateCertificates(Set<String> providerBucketNames,
-            RuntimeValue<Vertx> vertx,
+            Supplier<Vertx> vertx,
             ShutdownContext shutdownContext) {
-        this.vertx = vertx.getValue();
+        this.vertx = vertx.get();
         // Verify the default config
         if (runtimeConfig.getValue().defaultCertificateConfig().isPresent()) {
-            verifyCertificateConfig(runtimeConfig.getValue().defaultCertificateConfig().get(), vertx.getValue(),
+            verifyCertificateConfig(runtimeConfig.getValue().defaultCertificateConfig().get(), vertx.get(),
                     TlsConfig.DEFAULT_NAME);
         }
 
@@ -86,7 +86,7 @@ public class CertificateRecorder implements TlsConfigurationRegistry {
                         "The TLS configuration name " + TlsConfig.JAVA_NET_SSL_TLS_CONFIGURATION_NAME
                                 + " is reserved for providing access to default SunJSSE keystore; neither Quarkus extensions nor end users can adjust or override it");
             }
-            verifyCertificateConfig(runtimeConfig.getValue().namedCertificateConfig().get(name), vertx.getValue(), name);
+            verifyCertificateConfig(runtimeConfig.getValue().namedCertificateConfig().get(name), vertx.get(), name);
         }
 
         shutdownContext.addShutdownTask(new Runnable() {

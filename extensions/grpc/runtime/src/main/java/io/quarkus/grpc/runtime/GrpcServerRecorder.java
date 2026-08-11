@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.inject.Any;
@@ -96,7 +97,7 @@ public class GrpcServerRecorder {
     }
 
     public void initializeGrpcServer(boolean hasNoBindableServiceBeans, BeanContainer beanContainer,
-            RuntimeValue<Vertx> vertxSupplier,
+            Supplier<Vertx> vertxSupplier,
             RuntimeValue<Router> routerSupplier,
             ShutdownContext shutdown,
             Map<String, List<String>> blockingMethodsPerService,
@@ -107,7 +108,7 @@ public class GrpcServerRecorder {
             return;
         }
 
-        Vertx vertx = vertxSupplier.getValue();
+        Vertx vertx = vertxSupplier.get();
         GrpcServerConfiguration configuration = runtimeConfig.getValue().server();
 
         buildGrpcServer(vertx, configuration, routerSupplier, shutdown, blockingMethodsPerService, virtualMethodsPerService,

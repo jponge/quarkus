@@ -97,8 +97,8 @@ public class MongoClientRecorder {
      * resolution)
      * don't end up being performed on the event loop
      */
-    public void performInitialization(RuntimeValue<Vertx> vertx) {
-        MongoDnsClientProvider.vertx = vertx.getValue();
+    public void performInitialization(Supplier<Vertx> vertx) {
+        MongoDnsClientProvider.vertx = vertx.get();
         for (MongoClientConfig mongoClientConfig : runtimeConfig.getValue().clients().values()) {
             initializeDNSLookup(mongoClientConfig);
         }

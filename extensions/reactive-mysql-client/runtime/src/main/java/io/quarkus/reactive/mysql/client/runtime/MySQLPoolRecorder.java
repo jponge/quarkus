@@ -58,13 +58,13 @@ public class MySQLPoolRecorder {
         this.reactiveMySQLRuntimeConfig = reactiveMySQLRuntimeConfig;
     }
 
-    public Function<SyntheticCreationalContext<Pool>, Pool> configureMySQLPool(RuntimeValue<Vertx> vertx,
+    public Function<SyntheticCreationalContext<Pool>, Pool> configureMySQLPool(Supplier<Vertx> vertx,
             Supplier<Integer> eventLoopCount, String dataSourceName, ShutdownContext shutdown,
             Supplier<TlsConfigurationRegistry> tlsRegistrySupplier) {
         return new Function<>() {
             @Override
             public Pool apply(SyntheticCreationalContext<Pool> context) {
-                Pool pool = initialize((VertxInternal) vertx.getValue(),
+                Pool pool = initialize((VertxInternal) vertx.get(),
                         eventLoopCount.get(),
                         dataSourceName,
                         runtimeConfig.getValue().dataSources().get(dataSourceName),
