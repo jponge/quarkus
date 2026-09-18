@@ -191,12 +191,11 @@ public class RedisCacheImpl extends AbstractCache implements RedisCache {
                                                 throw new IllegalArgumentException("Cannot cache `null` value");
                                             }
                                             byte[] encodedValue = marshaller.encode(value);
-                                            Uni<V> result;
+                                            Uni<?> result;
                                             if (cacheInfo.useOptimisticLocking) {
-                                                result = multi(connection, set(connection, encodedKey, encodedValue))
-                                                        .replaceWith(value);
+                                                result = multi(connection, set(connection, encodedKey, encodedValue));
                                             } else {
-                                                result = set(connection, encodedKey, encodedValue).replaceWith(value);
+                                                result = set(connection, encodedKey, encodedValue);
                                             }
                                             if (isWorkerThread) {
                                                 return result.runSubscriptionOn(
