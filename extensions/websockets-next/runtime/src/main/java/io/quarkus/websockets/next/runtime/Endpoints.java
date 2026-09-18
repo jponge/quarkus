@@ -3,6 +3,7 @@ package io.quarkus.websockets.next.runtime;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.jboss.logging.Logger;
 
@@ -21,7 +22,9 @@ import io.quarkus.websockets.next.runtime.telemetry.ErrorInterceptor;
 import io.quarkus.websockets.next.runtime.telemetry.TelemetrySupport;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
+import io.vertx.core.AsyncResult;
 import io.vertx.core.Context;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
@@ -72,52 +75,30 @@ class Endpoints {
         onOpenContext.runOnContext(new Handler<Void>() {
             @Override
             public void handle(Void event) {
-                endpoint.onOpen().onComplete(r -> {
-                    if (r.succeeded()) {
-                        LOG.debugf("@OnOpen callback completed: %s", connection);
-                        // If Multi is consumed we need to invoke the callback eagerly
-                        // but after @OnOpen completes
-                        if (textBroadcastProcessor != null) {
-                            Multi<Object> multi = textBroadcastProcessor.onCancellation().call(connection::close);
-                            onOpenContext.runOnContext(new Handler<Void>() {
-                                @Override
-                                public void handle(Void event) {
-                                    endpoint.onTextMessage(multi).onComplete(r -> {
-                                        if (r.succeeded()) {
-                                            LOG.debugf("@OnTextMessage callback consuming Multi completed: %s",
-                                                    connection);
-                                        } else {
-                                            handleFailure(unhandledFailureStrategy, r.cause(),
-                                                    "Unable to complete @OnTextMessage callback consuming Multi",
-                                                    connection);
-                                        }
-                                    });
-                                }
-                            });
+                endpoint.onOpen().onComplete(new Handler<AsyncResult<Void>>() {
+                    @Override
+                    public void handle(AsyncResult<Void> r) {
+                        if (r.succeeded()) {
+                            LOG.debugf("@OnOpen callback completed: %s", connection);
+                            // If Multi is consumed we need to invoke the callback eagerly
+                            // but after @OnOpen completes
+                            if (textBroadcastProcessor != null) {
+                                Multi<Object> multi = textBroadcastProcessor.onCancellation().call(connection::close);
+                                runOnContextAndSubscribe(onOpenContext, () -> endpoint.onTextMessage(multi),
+                                        "@OnTextMessage", connection, unhandledFailureStrategy);
+                            }
+                            if (binaryBroadcastProcessor != null) {
+                                Multi<Object> multi = binaryBroadcastProcessor.onCancellation().call(connection::close);
+                                runOnContextAndSubscribe(onOpenContext, () -> endpoint.onBinaryMessage(multi),
+                                        "@OnBinaryMessage", connection, unhandledFailureStrategy);
+                            }
+                        } else {
+                            if (telemetrySupport != null) {
+                                telemetrySupport.connectionOpeningFailed(r.cause());
+                            }
+                            handleFailure(unhandledFailureStrategy, r.cause(), "Unable to complete @OnOpen callback",
+                                    connection);
                         }
-                        if (binaryBroadcastProcessor != null) {
-                            Multi<Object> multi = binaryBroadcastProcessor.onCancellation().call(connection::close);
-                            onOpenContext.runOnContext(new Handler<Void>() {
-                                @Override
-                                public void handle(Void event) {
-                                    endpoint.onBinaryMessage(multi).onComplete(r -> {
-                                        if (r.succeeded()) {
-                                            LOG.debugf("@OnBinaryMessage callback consuming Multi completed: %s",
-                                                    connection);
-                                        } else {
-                                            handleFailure(unhandledFailureStrategy, r.cause(),
-                                                    "Unable to complete @OnBinaryMessage callback consuming Multi",
-                                                    connection);
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    } else {
-                        if (telemetrySupport != null) {
-                            telemetrySupport.connectionOpeningFailed(r.cause());
-                        }
-                        handleFailure(unhandledFailureStrategy, r.cause(), "Unable to complete @OnOpen callback", connection);
                     }
                 });
             }
@@ -274,6 +255,28 @@ class Endpoints {
                         endpoint.doOnError(t).subscribe().with(
                                 v -> LOG.debugf("Error [%s] processed: %s", t.getClass(), connection),
                                 t -> handleFailure(unhandledFailureStrategy, t, "Unhandled error occurred", connection));
+                    }
+                });
+            }
+        });
+    }
+
+    private static void runOnContextAndSubscribe(Context ctx, Supplier<Future<Void>> action,
+            String callbackName, WebSocketConnectionBase connection,
+            UnhandledFailureStrategy failureStrategy) {
+        ctx.runOnContext(new Handler<Void>() {
+            @Override
+            public void handle(Void event) {
+                action.get().onComplete(new Handler<AsyncResult<Void>>() {
+                    @Override
+                    public void handle(AsyncResult<Void> r) {
+                        if (r.succeeded()) {
+                            LOG.debugf("%s callback consuming Multi completed: %s", callbackName, connection);
+                        } else {
+                            handleFailure(failureStrategy, r.cause(),
+                                    "Unable to complete " + callbackName + " callback consuming Multi",
+                                    connection);
+                        }
                     }
                 });
             }
