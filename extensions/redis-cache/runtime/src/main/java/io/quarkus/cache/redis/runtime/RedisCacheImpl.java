@@ -263,14 +263,12 @@ public class RedisCacheImpl extends AbstractCache implements RedisCache {
                             } else {
                                 Uni<V> getter = valueLoader.apply(key);
                                 return getter
-                                        .chain(value -> {
+                                        .call(value -> {
                                             byte[] encodedValue = marshaller.encode(value);
                                             if (cacheInfo.useOptimisticLocking) {
-                                                return multi(connection, set(connection, encodedKey, encodedValue))
-                                                        .replaceWith(value);
+                                                return multi(connection, set(connection, encodedKey, encodedValue));
                                             } else {
-                                                return set(connection, encodedKey, encodedValue)
-                                                        .replaceWith(value);
+                                                return set(connection, encodedKey, encodedValue);
                                             }
                                         });
                             }
