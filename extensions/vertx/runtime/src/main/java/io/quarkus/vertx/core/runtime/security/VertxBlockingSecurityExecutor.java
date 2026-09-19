@@ -31,7 +31,7 @@ public class VertxBlockingSecurityExecutor implements BlockingSecurityExecutor {
                 }
                 Context local = getOrCreateDuplicatedContext(vertx);
                 setContextSafe(local, true);
-                return uni.runSubscriptionOn(new Executor() {
+                Executor blockingExecutor = new Executor() {
                     @Override
                     public void execute(Runnable command) {
                         local.executeBlocking(new Callable<Void>() {
@@ -42,7 +42,20 @@ public class VertxBlockingSecurityExecutor implements BlockingSecurityExecutor {
                             }
                         }, false);
                     }
-                });
+                };
+                Executor eventLoopExecutor = new Executor() {
+                    @Override
+                    public void execute(Runnable command) {
+                        local.runOnContext(new io.vertx.core.Handler<Void>() {
+                            @Override
+                            public void handle(Void event) {
+                                command.run();
+                            }
+                        });
+                    }
+                };
+                return uni.runSubscriptionOn(blockingExecutor)
+                        .emitOn(eventLoopExecutor);
             }
         });
     }
