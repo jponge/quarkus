@@ -37,20 +37,17 @@ public class MutinyProcessor {
     }
 
     /**
-     * Configure Mutiny's dropped exception handler, thread blocking checker,
-     * and operator logger at static init time.
+     * Configure the Mutiny infrastructure at static-init time: dropped exception handler,
+     * thread blocking checker, operator logger, and empty interceptor/decorator lists
+     * (prevents ServiceLoader classpath scanning at runtime).
      *
-     * @param reg the service registrar
+     * @param registrar the service registrar
      */
     @BuildStep
-    void buildTimeInit(ServiceRegistrar reg) {
-        reg
+    void buildTimeInit(ServiceRegistrar registrar) {
+        registrar
                 .forService("io.quarkus.mutiny.static-init")
                 .atPhase(Phase.STATIC_INIT)
-                .onStart(ctx -> {
-                    MutinyInfrastructure.configureDroppedExceptionHandler();
-                    MutinyInfrastructure.configureThreadBlockingChecker();
-                    MutinyInfrastructure.configureOperatorLogger();
-                });
+                .onStart(ctx -> MutinyInfrastructure.configureInfrastructure());
     }
 }
