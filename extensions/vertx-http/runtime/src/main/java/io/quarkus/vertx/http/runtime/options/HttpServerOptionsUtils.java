@@ -400,6 +400,7 @@ public class HttpServerOptionsUtils {
                 settings.setMaxHeaderListSize(httpConfig.limits().maxHeaderListSize().getAsLong());
             }
             http2.setInitialSettings(settings);
+            http2.setMultiplexImplementation(true);
 
             // RST attack protection
             if (httpConfig.limits().rstFloodMaxRstFramePerWindow().isPresent()) {
