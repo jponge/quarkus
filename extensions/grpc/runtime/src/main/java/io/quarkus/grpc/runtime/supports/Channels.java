@@ -148,6 +148,7 @@ public class Channels {
         }
 
         HttpClientOptions options = new HttpClientOptions();
+        options.setHttp2MultiplexImplementation(true);
         options.setHttp2ClearTextUpgrade(false); // this fixes i30379
 
         // Start with almost empty options and default max msg size ...

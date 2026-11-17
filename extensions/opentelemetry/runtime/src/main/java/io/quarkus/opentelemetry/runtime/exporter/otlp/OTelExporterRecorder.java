@@ -474,6 +474,7 @@ public class OTelExporterRecorder {
 
         @Override
         public void accept(HttpClientOptions options) {
+            options.setHttp2MultiplexImplementation(true);
             configureTLS(options);
             if (config.proxyOptions().enabled()) {
                 configureProxyOptions(options);

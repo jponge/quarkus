@@ -269,7 +269,7 @@ public class ClientBuilderImpl extends ClientBuilder {
         HttpClientOptions options = Optional.ofNullable(configuration.getFromContext(HttpClientOptions.class))
                 .orElseGet(HttpClientOptions::new);
         if (http2) {
-            options.setProtocolVersion(HttpVersion.HTTP_2);
+            options.setProtocolVersion(HttpVersion.HTTP_2).setHttp2MultiplexImplementation(true);
         }
 
         if (http2 || alpn) {
