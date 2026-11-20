@@ -9,10 +9,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.vertx.core.buffer.Buffer;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -30,7 +30,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpClientRequest;
-import io.vertx.core.http.HttpClientResponse;
+import io.vertx.core.http.HttpClosedException;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpVersion;
@@ -57,7 +57,7 @@ public class GracefulShutdownFilterTest {
 
         testWithJdkHttpClientAndHttp2AfterShutdown();
 
-        testWithVertxHttpClientAndHttp2AfterShutdown();
+        testWithVertxHttpClientAndHttp2GracefulShutdown();
 
         testWithRestAssuredAndHttp11AfterShutdown();
     }
@@ -68,26 +68,27 @@ public class GracefulShutdownFilterTest {
                 .body(is("http/1.1"));
     }
 
-    private void testWithVertxHttpClientAndHttp2AfterShutdown() throws InterruptedException, TimeoutException {
+    private void testWithVertxHttpClientAndHttp2GracefulShutdown() throws TimeoutException {
         HttpClient client = vertx.createHttpClient(new HttpClientOptions()
                 .setProtocolVersion(HttpVersion.HTTP_2)
                 .setDefaultHost("localhost")
                 .setDefaultPort(RestAssured.port));
 
-        CountDownLatch responseLatch = new CountDownLatch(1);
-
-        // Send a GET request
-        Future<HttpClientResponse> response = client
+        // Per RFC 9113 §6.8, streams ≤ lastStreamId may complete during graceful shutdown.
+        // The server may close the connection before the client consumes the response, which is fine.
+        Future<String> response = client
                 .request(HttpMethod.GET, "/")
                 .compose(HttpClientRequest::send)
-                .onFailure(t -> responseLatch.countDown());
+                .compose(resp -> {
+                    Assertions.assertThat(resp.statusCode()).isEqualTo(200);
+                    return resp.body().map(Buffer::toString);
+                });
 
-        if (!responseLatch.await(10, TimeUnit.SECONDS)) {
-            throw new RuntimeException("Timeout waiting for response");
-        }
-
-        if (!response.failed()) {
-            throw new RuntimeException("The request should have failed after the server shutdown was triggered");
+        try {
+            String body = response.await(10, TimeUnit.SECONDS);
+            Assertions.assertThat(body).isEqualTo("h2");
+        } catch (HttpClosedException e) {
+            // Fine: server closed the connection before the client consumed the response.
         }
 
         client.close().await(5, TimeUnit.SECONDS);
