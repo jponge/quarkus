@@ -58,6 +58,7 @@ import io.quarkus.rest.client.reactive.ParamStyle;
 import io.quarkus.rest.client.reactive.runtime.context.HttpClientOptionsContextResolver;
 import io.quarkus.restclient.config.RestClientsConfig;
 import io.quarkus.tls.TlsConfiguration;
+import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.smallrye.config.Config;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpClientRequest;
@@ -718,6 +719,14 @@ public class RestClientBuilderImpl implements RestClientBuilder, VertxRequestCus
                 clientBuilder.property(QuarkusRestClientProperties.MULTIPART_ENCODER_MODE, multipartPostEncoderMode);
             }
         }
+
+        clientBuilder.clientOptionsCustomizer(new Consumer<>() {
+            @Override
+            public void accept(HttpClientOptions options) {
+                options.setHttp2MultiplexImplementation(
+                        Config.get().getConfigMapping(VertxConfiguration.class).useHttp2MultiplexImplementation());
+            }
+        });
 
         ClientImpl clientImpl = clientBuilder.build();
         TlsConfig tlsConfig = clientBuilder.getTlsConfig();

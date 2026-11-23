@@ -97,7 +97,8 @@ public class HttpServerOptionsUtils {
             VertxHttpConfig httpConfig,
             LaunchMode launchMode,
             List<String> websocketSubProtocols,
-            TlsConfigurationRegistry registry) throws IOException {
+            TlsConfigurationRegistry registry,
+            boolean useHttp2MultiplexImplementation) throws IOException {
 
         if (!httpConfig.hostEnabled()) {
             return null;
@@ -122,7 +123,7 @@ public class HttpServerOptionsUtils {
             ServerSSLOptions sslOptions = createServerSslOptions(bucket, clientAuth);
             SSLEngineOptions engineOptions = bucket.getSslEngineOptions().orElse(null);
             applyCommonOptions(config, httpBuildTimeConfig, httpConfig, websocketSubProtocols,
-                    httpConfig.determineSslHost(), ProxyProtocolListener.HTTPS);
+                    httpConfig.determineSslHost(), ProxyProtocolListener.HTTPS, useHttp2MultiplexImplementation);
             return new ServerConfig(config, sslOptions, engineOptions);
         }
 
@@ -133,7 +134,7 @@ public class HttpServerOptionsUtils {
         }
         sslOptions.setClientAuth(getTlsClientAuth(httpConfig, httpBuildTimeConfig, launchMode));
         applyCommonOptions(config, httpBuildTimeConfig, httpConfig, websocketSubProtocols,
-                httpConfig.determineSslHost(), ProxyProtocolListener.HTTPS);
+                httpConfig.determineSslHost(), ProxyProtocolListener.HTTPS, useHttp2MultiplexImplementation);
         return new ServerConfig(config, sslOptions);
     }
 
@@ -224,7 +225,8 @@ public class HttpServerOptionsUtils {
             VertxHttpBuildTimeConfig buildTimeConfig,
             VertxHttpConfig httpConfig,
             LaunchMode launchMode,
-            List<String> websocketSubProtocols) {
+            List<String> websocketSubProtocols,
+            boolean useHttp2MultiplexImplementation) {
         if (!httpConfig.hostEnabled()) {
             return null;
         }
@@ -240,7 +242,7 @@ public class HttpServerOptionsUtils {
         config.setPort(port);
 
         applyCommonOptions(config, buildTimeConfig, httpConfig, websocketSubProtocols, httpConfig.host(),
-                ProxyProtocolListener.HTTP);
+                ProxyProtocolListener.HTTP, useHttp2MultiplexImplementation);
         return config;
     }
 
@@ -270,13 +272,14 @@ public class HttpServerOptionsUtils {
     public static HttpServerConfig createDomainSocketConfig(
             VertxHttpBuildTimeConfig buildTimeConfig,
             VertxHttpConfig httpConfig,
-            List<String> websocketSubProtocols) {
+            List<String> websocketSubProtocols,
+            boolean useHttp2MultiplexImplementation) {
         if (!httpConfig.domainSocketEnabled()) {
             return null;
         }
         HttpServerConfig config = new HttpServerConfig();
         applyCommonOptions(config, buildTimeConfig, httpConfig, websocketSubProtocols, httpConfig.host(),
-                ProxyProtocolListener.DOMAIN_SOCKET);
+                ProxyProtocolListener.DOMAIN_SOCKET, useHttp2MultiplexImplementation);
         config.setHost(httpConfig.domainSocket());
         return config;
     }
@@ -310,7 +313,8 @@ public class HttpServerOptionsUtils {
             VertxHttpConfig httpConfig,
             List<String> websocketSubProtocols,
             String host,
-            ProxyProtocolListener listener) {
+            ProxyProtocolListener listener,
+            boolean useHttp2MultiplexImplementation) {
         config.setHost(host);
         setIdleTimeout(httpConfig, config);
 
@@ -400,7 +404,7 @@ public class HttpServerOptionsUtils {
                 settings.setMaxHeaderListSize(httpConfig.limits().maxHeaderListSize().getAsLong());
             }
             http2.setInitialSettings(settings);
-            http2.setMultiplexImplementation(true);
+            http2.setMultiplexImplementation(useHttp2MultiplexImplementation);
 
             // RST attack protection
             if (httpConfig.limits().rstFloodMaxRstFramePerWindow().isPresent()) {

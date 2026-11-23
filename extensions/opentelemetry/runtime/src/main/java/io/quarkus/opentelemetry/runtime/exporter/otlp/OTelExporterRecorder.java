@@ -59,6 +59,8 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.tls.TlsConfiguration;
 import io.quarkus.tls.TlsConfigurationRegistry;
+import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
+import io.smallrye.config.Config;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.net.PemKeyCertOptions;
@@ -474,7 +476,9 @@ public class OTelExporterRecorder {
 
         @Override
         public void accept(HttpClientOptions options) {
-            options.setHttp2MultiplexImplementation(true);
+            options.setHttp2MultiplexImplementation(Config.get()
+                    .getConfigMapping(VertxConfiguration.class)
+                    .useHttp2MultiplexImplementation());
             configureTLS(options);
             if (config.proxyOptions().enabled()) {
                 configureProxyOptions(options);

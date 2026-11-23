@@ -38,9 +38,10 @@ import io.vertx.core.http.HttpServerConfig;
 class HttpServerOptionsUtilsTest {
 
     private static void applyCommonOptions(HttpServerConfig config, VertxHttpBuildTimeConfig buildTimeConfig,
-            VertxHttpConfig httpConfig, List<String> websocketSubProtocols, String host) {
+            VertxHttpConfig httpConfig, List<String> websocketSubProtocols, String host,
+            boolean useHttp2MultiplexImplementation) {
         HttpServerOptionsUtils.applyCommonOptions(config, buildTimeConfig, httpConfig, websocketSubProtocols, host,
-                ProxyProtocolListener.HTTP);
+                ProxyProtocolListener.HTTP, useHttp2MultiplexImplementation);
     }
 
     @Test
@@ -49,7 +50,7 @@ class HttpServerOptionsUtilsTest {
         VertxHttpBuildTimeConfig buildTimeConfig = buildTimeConfig(true, Optional.of(List.of("gzip")), OptionalInt.empty());
         VertxHttpConfig httpConfig = minimalHttpConfig();
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getCompressionConfig()).isNotNull();
         assertThat(config.getCompressionConfig().isCompressionEnabled()).isTrue();
@@ -62,7 +63,7 @@ class HttpServerOptionsUtilsTest {
                 OptionalInt.empty());
         VertxHttpConfig httpConfig = minimalHttpConfig();
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getCompressionConfig()).isNotNull();
         assertThat(config.getCompressionConfig().isCompressionEnabled()).isTrue();
@@ -75,7 +76,7 @@ class HttpServerOptionsUtilsTest {
         VertxHttpBuildTimeConfig buildTimeConfig = buildTimeConfig(false, Optional.empty(), OptionalInt.empty());
         VertxHttpConfig httpConfig = minimalHttpConfig();
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getCompressionConfig().isCompressionEnabled()).isFalse();
     }
@@ -86,11 +87,24 @@ class HttpServerOptionsUtilsTest {
         VertxHttpBuildTimeConfig buildTimeConfig = buildTimeConfig(false, Optional.empty(), OptionalInt.empty());
         VertxHttpConfig httpConfig = minimalHttpConfig(true);
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getHttp2Config()).isNotNull();
         assertThat(config.getHttp2Config().getInitialSettings()).isNotNull();
         assertThat(config.getHttp2Config().getInitialSettings().isPushEnabled()).isTrue();
+        assertThat(config.getHttp2Config().getMultiplexImplementation()).isTrue();
+    }
+
+    @Test
+    void applyCommonOptionsHttp2MultiplexImplementationDisabled() {
+        HttpServerConfig config = new HttpServerConfig();
+        VertxHttpBuildTimeConfig buildTimeConfig = buildTimeConfig(false, Optional.empty(), OptionalInt.empty());
+        VertxHttpConfig httpConfig = minimalHttpConfig(true);
+
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", false);
+
+        assertThat(config.getHttp2Config()).isNotNull();
+        assertThat(config.getHttp2Config().getMultiplexImplementation()).isFalse();
     }
 
     @Test
@@ -99,7 +113,7 @@ class HttpServerOptionsUtilsTest {
         VertxHttpBuildTimeConfig buildTimeConfig = buildTimeConfig(false, Optional.empty(), OptionalInt.empty());
         VertxHttpConfig httpConfig = minimalHttpConfig();
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getHttp1Config().getMaxHeaderSize()).isEqualTo(20480);
         assertThat(config.getHttp1Config().getMaxChunkSize()).isEqualTo(8192);
@@ -115,7 +129,7 @@ class HttpServerOptionsUtilsTest {
         VertxHttpConfig httpConfig = minimalHttpConfig();
         List<String> subProtocols = List.of("graphql-ws", "subscriptions-transport-ws");
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, subProtocols, "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, subProtocols, "localhost", true);
 
         assertThat(config.getWebSocketConfig().getSubProtocols()).containsExactlyElementsOf(subProtocols);
     }
@@ -135,7 +149,7 @@ class HttpServerOptionsUtilsTest {
         when(trafficShaping.peakOutboundGlobalBandwidth()).thenReturn(Optional.empty());
         when(httpConfig.trafficShaping()).thenReturn(trafficShaping);
 
-        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost");
+        applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost", true);
 
         assertThat(config.getTcpConfig().getTrafficShapingOptions()).isNotNull();
     }
@@ -148,7 +162,7 @@ class HttpServerOptionsUtilsTest {
         when(httpConfig.determinePort(LaunchMode.NORMAL)).thenReturn(8080);
 
         HttpServerConfig config = HttpServerOptionsUtils.createHttpServerConfig(
-                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList());
+                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList(), true);
 
         assertThat(config).isNotNull();
         assertThat(config.getTcpHost()).isEqualTo("localhost");
@@ -164,12 +178,12 @@ class HttpServerOptionsUtilsTest {
 
         HttpServerConfig httpServerConfig = new HttpServerConfig();
         applyCommonOptions(httpServerConfig, buildTimeConfig, httpConfig, Collections.emptyList(),
-                httpConfig.host());
+                httpConfig.host(), true);
         assertThat(httpServerConfig.getTcpHost()).isEqualTo("127.0.0.1");
 
         HttpServerConfig httpsServerConfig = new HttpServerConfig();
         applyCommonOptions(httpsServerConfig, buildTimeConfig, httpConfig, Collections.emptyList(),
-                httpConfig.determineSslHost());
+                httpConfig.determineSslHost(), true);
         assertThat(httpsServerConfig.getTcpHost()).isEqualTo("0.0.0.0");
     }
 
@@ -182,7 +196,7 @@ class HttpServerOptionsUtilsTest {
 
         HttpServerConfig config = new HttpServerConfig();
         applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(),
-                httpConfig.determineSslHost());
+                httpConfig.determineSslHost(), true);
 
         assertThat(config.getTcpHost()).isEqualTo("localhost");
     }
@@ -195,7 +209,7 @@ class HttpServerOptionsUtilsTest {
         when(httpConfig.determinePort(LaunchMode.NORMAL)).thenReturn(8080);
 
         HttpServerConfig config = HttpServerOptionsUtils.createHttpServerConfig(
-                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList());
+                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList(), true);
 
         assertThat(config).isNotNull();
         assertThat(config.getTcpPort()).isEqualTo(8080);
@@ -208,7 +222,7 @@ class HttpServerOptionsUtilsTest {
         when(httpConfig.hostEnabled()).thenReturn(false);
 
         HttpServerConfig config = HttpServerOptionsUtils.createHttpServerConfig(
-                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList());
+                buildTimeConfig, httpConfig, LaunchMode.NORMAL, Collections.emptyList(), true);
 
         assertThat(config).isNull();
     }
@@ -341,7 +355,7 @@ class HttpServerOptionsUtilsTest {
         for (ProxyProtocolListener listener : ProxyProtocolListener.values()) {
             HttpServerConfig config = new HttpServerConfig();
             HttpServerOptionsUtils.applyCommonOptions(config, buildTimeConfig, httpConfig, Collections.emptyList(),
-                    "localhost", listener);
+                    "localhost", listener, true);
             assertThat(config.getTcpConfig().isUseProxyProtocol()).as(listener.name()).isTrue();
         }
     }
@@ -355,13 +369,13 @@ class HttpServerOptionsUtilsTest {
 
         HttpServerConfig http = new HttpServerConfig();
         HttpServerOptionsUtils.applyCommonOptions(http, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost",
-                ProxyProtocolListener.HTTP);
+                ProxyProtocolListener.HTTP, true);
         HttpServerConfig https = new HttpServerConfig();
         HttpServerOptionsUtils.applyCommonOptions(https, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost",
-                ProxyProtocolListener.HTTPS);
+                ProxyProtocolListener.HTTPS, true);
         HttpServerConfig domainSocket = new HttpServerConfig();
         HttpServerOptionsUtils.applyCommonOptions(domainSocket, buildTimeConfig, httpConfig, Collections.emptyList(),
-                "localhost", ProxyProtocolListener.DOMAIN_SOCKET);
+                "localhost", ProxyProtocolListener.DOMAIN_SOCKET, true);
 
         assertThat(http.getTcpConfig().isUseProxyProtocol()).isFalse();
         assertThat(https.getTcpConfig().isUseProxyProtocol()).isTrue();
@@ -377,7 +391,7 @@ class HttpServerOptionsUtilsTest {
 
         HttpServerConfig https = new HttpServerConfig();
         HttpServerOptionsUtils.applyCommonOptions(https, buildTimeConfig, httpConfig, Collections.emptyList(), "localhost",
-                ProxyProtocolListener.HTTPS);
+                ProxyProtocolListener.HTTPS, true);
         assertThat(https.getTcpConfig().isUseProxyProtocol()).isFalse();
     }
 

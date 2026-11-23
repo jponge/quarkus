@@ -58,6 +58,7 @@ import io.quarkus.tls.TlsConfiguration;
 import io.quarkus.tls.TlsConfigurationRegistry;
 import io.quarkus.tls.runtime.config.TlsConfigUtils;
 import io.quarkus.value.registry.ValueRegistry;
+import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.quarkus.vertx.http.HttpServer;
 import io.smallrye.config.Config;
 import io.smallrye.stork.Stork;
@@ -148,7 +149,8 @@ public class Channels {
         }
 
         HttpClientOptions options = new HttpClientOptions();
-        options.setHttp2MultiplexImplementation(true);
+        options.setHttp2MultiplexImplementation(
+                Config.get().getConfigMapping(VertxConfiguration.class).useHttp2MultiplexImplementation());
         options.setHttp2ClearTextUpgrade(false); // this fixes i30379
 
         // Start with almost empty options and default max msg size ...

@@ -107,4 +107,12 @@ public interface VertxConfiguration {
     @WithDefault("1s")
     Duration blockedThreadCheckInterval();
 
+    /**
+     * Whether to use the HTTP/2 multiplex engine, which allocates a dedicated channel per stream
+     * for improved concurrency and resource isolation. When disabled, the previous single-connection
+     * HTTP/2 implementation is used instead.
+     */
+    @WithDefault("true")
+    boolean useHttp2MultiplexImplementation();
+
 }

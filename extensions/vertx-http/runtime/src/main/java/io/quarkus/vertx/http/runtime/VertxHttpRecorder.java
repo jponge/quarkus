@@ -356,6 +356,9 @@ public class VertxHttpRecorder {
             rootHandler = root;
 
             var insecureRequestStrategy = getInsecureRequestStrategy(httpConfig, httpBuildConfig, LaunchMode.DEVELOPMENT);
+            boolean useHttp2Multiplex = config
+                    .getConfigMapping(VertxConfiguration.class)
+                    .useHttp2MultiplexImplementation();
             doServerStart(vertx, httpBuildConfig, httpConfig, null, managementBuildTimeConfig, managementConfig,
                     LaunchMode.DEVELOPMENT,
                     new Supplier<Integer>() {
@@ -363,7 +366,7 @@ public class VertxHttpRecorder {
                         public Integer get() {
                             return ProcessorInfo.availableProcessors(); //this is dev mode, so the number of IO threads not always being 100% correct does not really matter in this case
                         }
-                    }, null, insecureRequestStrategy, false);
+                    }, null, insecureRequestStrategy, false, useHttp2Multiplex);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -415,10 +418,13 @@ public class VertxHttpRecorder {
             // Start the server
             if (closeTask == null) {
                 var insecureRequestStrategy = getInsecureRequestStrategy(httpConfiguration, httpBuildTimeConfig, launchMode);
+                boolean useHttp2Multiplex = Config.get()
+                        .getConfigMapping(VertxConfiguration.class)
+                        .useHttp2MultiplexImplementation();
                 doServerStart(vertx.get(), httpBuildTimeConfig, httpConfiguration, managementRouter, managementBuildTimeConfig,
                         managementConfig, launchMode, ioThreads, websocketSubProtocols,
                         insecureRequestStrategy,
-                        auxiliaryApplication);
+                        auxiliaryApplication, useHttp2Multiplex);
                 if (launchMode != LaunchMode.DEVELOPMENT) {
                     shutdown.addShutdownTask(closeTask);
                 } else {
@@ -933,7 +939,8 @@ public class VertxHttpRecorder {
             VertxHttpConfig httpConfig,
             LaunchMode launchMode,
             Supplier<Integer> eventLoops, List<String> websocketSubProtocols, InsecureRequests insecureRequestStrategy,
-            TlsConfigurationRegistry registry)
+            TlsConfigurationRegistry registry,
+            boolean useHttp2MultiplexImplementation)
             throws IOException {
 
         if (!httpConfig.hostEnabled() && !httpConfig.domainSocketEnabled()) {
@@ -942,7 +949,7 @@ public class VertxHttpRecorder {
 
         // Http server configuration
         httpMainServerConfig = HttpServerOptionsUtils.createHttpServerConfig(httpBuildTimeConfig, httpConfig, launchMode,
-                websocketSubProtocols);
+                websocketSubProtocols, useHttp2MultiplexImplementation);
         if (httpMainServerConfig != null) {
             int port = httpConfig.determinePort(launchMode);
             if (port <= 0) {
@@ -951,7 +958,7 @@ public class VertxHttpRecorder {
             }
         }
         httpMainDomainSocketConfig = HttpServerOptionsUtils.createDomainSocketConfig(httpBuildTimeConfig, httpConfig,
-                websocketSubProtocols);
+                websocketSubProtocols, useHttp2MultiplexImplementation);
         if (httpMainDomainSocketConfig != null) {
             File file = new File(httpConfig.domainSocket());
             if (!file.getParentFile().canWrite()) {
@@ -962,7 +969,7 @@ public class VertxHttpRecorder {
         }
 
         HttpServerOptionsUtils.ServerConfig tmpSslConfig = HttpServerOptionsUtils.createSslServerConfig(
-                httpBuildTimeConfig, httpConfig, launchMode, websocketSubProtocols, registry);
+                httpBuildTimeConfig, httpConfig, launchMode, websocketSubProtocols, registry, useHttp2MultiplexImplementation);
         httpMainSslServerConfig = tmpSslConfig != null ? tmpSslConfig.config() : null;
         ServerSSLOptions tmpSslOptions = tmpSslConfig != null ? tmpSslConfig.sslOptions() : null;
         httpMainSslEngineOptions = tmpSslConfig != null ? tmpSslConfig.sslEngineOptions() : null;
@@ -1066,7 +1073,8 @@ public class VertxHttpRecorder {
             Supplier<Integer> eventLoops,
             List<String> websocketSubProtocols,
             InsecureRequests insecureRequestStrategy,
-            boolean auxiliaryApplication) throws IOException {
+            boolean auxiliaryApplication,
+            boolean useHttp2MultiplexImplementation) throws IOException {
 
         TlsConfigurationRegistry registry = null;
         if (Arc.container() != null) {
@@ -1076,7 +1084,7 @@ public class VertxHttpRecorder {
         validateManagementPortDistinctFromMainServer(httpConfig, managementBuildTimeConfig, managementConfig, launchMode);
 
         var mainServerFuture = initializeMainHttpServer(vertx, httpBuildTimeConfig, httpConfig, launchMode,
-                eventLoops, websocketSubProtocols, insecureRequestStrategy, registry);
+                eventLoops, websocketSubProtocols, insecureRequestStrategy, registry, useHttp2MultiplexImplementation);
         var managementInterfaceFuture = initializeManagementInterface(vertx, managementRouter, managementBuildTimeConfig,
                 managementConfig, launchMode, websocketSubProtocols, registry);
         var managementInterfaceDomainSocketFuture = initializeManagementInterfaceWithDomainSocket(vertx,
